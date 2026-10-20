@@ -16,7 +16,7 @@ const CONFIG = {
      Pega aquí el "ID de cliente" OAuth de tu proyecto de Google Cloud
      (termina en .apps.googleusercontent.com). No es secreto: puede ir en el código.
      Los pasos para crearlo están en el README. */
-  googleClientId: '',
+  googleClientId: '37836378505-0nuu9bd8t377qfh4eh4p23paacsth9gp.apps.googleusercontent.com',
 
   financeUrl: 'https://deliio.github.io/finanzas/',
 
