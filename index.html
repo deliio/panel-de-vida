@@ -186,7 +186,8 @@
               <span><i style="--c:var(--c-salud)"></i>Gimnasio</span>
               <span><i style="--c:var(--c-viaje)"></i>Running</span>
               <span><i style="--c:var(--c-proyecto)"></i>Bici</span>
-              <span class="muted">Toca un día para marcar que fuiste al gimnasio</span>
+              <span><i style="--c:var(--c-uni)"></i>Otro</span>
+              <span class="muted">Toca un día para elegir qué haces y apuntar lo que hiciste</span>
             </div>
           </div>
           <div class="cal-stats" id="calStats"></div>
@@ -295,6 +296,28 @@
     <div class="dialog-foot">
       <button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button>
       <button class="btn btn-primary" id="saveRoutine" type="button">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ FICHA DE UN DÍA (calendario) ============ -->
+<dialog class="dialog" id="dayDialog">
+  <form method="dialog" id="dayForm">
+    <div class="card-head"><h2 id="dayTitle">Día</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
+    <h3 class="dlg-sub">Qué voy a hacer</h3>
+    <div id="dayPlan"></div>
+    <div id="dayDoneWrap">
+      <h3 class="dlg-sub">Qué hice</h3>
+      <div class="day-checks" id="dayDone"></div>
+      <div class="food-row day-run" id="dayRun" hidden>
+        <input type="number" id="dayRunKm" step="0.01" min="0.1" placeholder="km corridos" aria-label="Kilómetros">
+        <input type="text" id="dayRunTime" placeholder="tiempo mm:ss" aria-label="Tiempo">
+      </div>
+      <textarea class="day-note" id="dayNote" rows="3" maxlength="500" placeholder="Qué hiciste: ejercicios, pesos, sensaciones…"></textarea>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn btn-primary" value="save">Guardar</button>
     </div>
   </form>
 </dialog>

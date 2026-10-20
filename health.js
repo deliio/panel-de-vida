@@ -15,8 +15,9 @@ const HEALTH = {
   stravaDays: 120,                          // días de historial que se piden a Strava
 };
 
-const KINDS = { gym: 'Gimnasio', run: 'Running', bike: 'Bici', rest: 'Descanso' };
-const KIND_COLOR = { gym: 'salud', run: 'viaje', bike: 'proyecto', rest: 'personal' };
+const KINDS = { gym: 'Gimnasio', run: 'Running', bike: 'Bici', other: 'Otro', rest: 'Descanso' };
+const KIND_COLOR = { gym: 'salud', run: 'viaje', bike: 'proyecto', other: 'uni', rest: 'personal' };
+const DONE_KINDS = ['gym', 'run', 'bike', 'other']; // lo que puedes marcar como hecho en un día
 const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MEAL_NAMES = ['Desayuno', 'Comida', 'Merienda', 'Cena', 'Snack'];
 
@@ -108,6 +109,8 @@ const FOOD_DB = [
    ESTADO
    --------------------------------------------------------- */
 let routine, gymLog, kneeLog, profile, runsManual, stravaCfg, food;
+let calPlan;  // { 'YYYY-MM-DD': [idEntreno…] } · plan elegido para un día concreto (si no, manda la rutina semanal)
+let dayLog;   // { 'YYYY-MM-DD': { done: ['run', …], note } } · lo que hiciste ese día
 let foodOffset = 0;   // 0 = hoy, -1 = ayer…
 let kneeOffset = 0;
 let calCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -128,6 +131,8 @@ const kneeDay = () => dateKey(addDays(kneeOffset));
 function loadHealthState() {
   routine = store.get('routine', DEFAULT_ROUTINE);
   gymLog = store.get('gymLog', {});
+  calPlan = store.get('calPlan', {});
+  dayLog = store.get('dayLog', {});
   kneeLog = store.get('knee', {});
   profile = store.get('profile', null);
   runsManual = store.get('runs', null); // null = nunca registraste nada → ejemplo
@@ -145,7 +150,26 @@ const workoutFor = (weekday) => {
   const id = routine.days[weekday];
   return { id, ...(routine.workouts[id] || routine.workouts.rest || { label: 'Descanso', kind: 'rest', items: [] }) };
 };
-const todayWorkout = () => workoutFor(new Date().getDay());
+// Lo que toca un día: tu elección para esa fecha o, si no elegiste nada, la rutina semanal
+function plansFor(key) {
+  const ids = calPlan[key] ?? [routine.days[parseKey(key).getDay()]];
+  return ids.filter((id) => routine.workouts[id]).map((id) => ({ id, ...routine.workouts[id] }));
+}
+const REST = { id: 'rest', label: 'Descanso', kind: 'rest', items: [] };
+const todayWorkout = () => plansFor(TODAY).find((p) => p.kind !== 'rest') || plansFor(TODAY)[0] || REST;
+const runPlannedToday = () => plansFor(TODAY).some((p) => p.kind === 'run');
+
+// Qué hiciste un día (Strava, carreras apuntadas, gimnasio marcado y tu registro del día)
+function didOn(key) {
+  const acts = actsOn(key);
+  const done = dayLog[key]?.done || [];
+  return {
+    gym: !!gymLog[key] || done.includes('gym') || acts.some((a) => kindOf(a.type) === 'gym'),
+    run: done.includes('run') || acts.some((a) => kindOf(a.type) === 'run') || (runsManual || []).some((r) => r.date === key),
+    bike: done.includes('bike') || acts.some((a) => kindOf(a.type) === 'bike'),
+    other: done.includes('other'),
+  };
+}
 
 function kindOf(type = '') {
   if (/Run/.test(type)) return 'run';
@@ -205,7 +229,7 @@ function kneeAdvice(st = kneeStatus()) {
     return `Tu último dolor fue ${st.lastPain}/10 (tu límite es ${painLimit}). Según tu plan no subas de paso: descansa o repite distancia, y si sigue, coméntalo con tu médico.`;
   }
   const km = steps[st.step];
-  return todayWorkout().kind === 'run'
+  return runPlannedToday()
     ? `Hoy toca correr ${km} km a ${paceRange()} /km. Apunta el dolor al terminar y mañana por la mañana.`
     : `Próxima salida: ${km} km a ${paceRange()} /km.`;
 }
@@ -238,20 +262,22 @@ const round1 = (v) => Math.round(v * 10) / 10;
 /* ---------------------------------------------------------
    TEXTO PARA EL BRIEFING (lo usa app.js)
    --------------------------------------------------------- */
-function healthBriefing() {
-  const w = todayWorkout();
-  const parts = [];
-  if (w.kind === 'rest') parts.push('Hoy toca <strong>descanso activo</strong>.');
-  else if (w.kind === 'gym') parts.push(`Hoy toca <strong>gimnasio · ${esc(w.label)}</strong> (${w.items.length} ejercicios).`);
-  else if (w.kind === 'bike') parts.push('Hoy toca <strong>bici</strong>.');
-  else if (w.kind === 'run') {
-    const st = kneeStatus();
-    parts.push(TODAY < HEALTH.knee.start
-      ? `Hoy toca <strong>correr</strong>. Tu plan de rodillas empieza el ${parseKey(HEALTH.knee.start).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })} con ${HEALTH.knee.steps[0]} km a ${paceRange()} /km.`
-      : st.done
-      ? `Hoy toca <strong>correr</strong> a ${paceRange()} /km.`
-      : `Hoy toca <strong>correr ${HEALTH.knee.steps[st.step]} km</strong> a ${paceRange()} /km (paso ${st.step + 1} de ${HEALTH.knee.steps.length} del plan de rodillas).`);
+function planText(w) {
+  if (w.kind === 'gym') return `<strong>gimnasio · ${esc(w.label)}</strong> (${w.items.length} ejercicios)`;
+  if (w.kind === 'bike') return '<strong>bici</strong>';
+  if (w.kind !== 'run') return `<strong>${esc(w.label)}</strong>`;
+  const st = kneeStatus();
+  if (TODAY < HEALTH.knee.start) {
+    return `<strong>correr</strong> (tu plan de rodillas empieza el ${parseKey(HEALTH.knee.start).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })} con ${HEALTH.knee.steps[0]} km a ${paceRange()} /km)`;
   }
+  return st.done
+    ? `<strong>correr</strong> a ${paceRange()} /km`
+    : `<strong>correr ${HEALTH.knee.steps[st.step]} km</strong> a ${paceRange()} /km (paso ${st.step + 1} de ${HEALTH.knee.steps.length} del plan de rodillas)`;
+}
+
+function healthBriefing() {
+  const plans = plansFor(TODAY).filter((p) => p.kind !== 'rest');
+  const parts = [plans.length ? `Hoy toca ${joinEs(plans.map(planText))}.` : 'Hoy toca <strong>descanso</strong>.'];
   if (maxPain(kneeLog[TODAY]) == null) parts.push('Recuerda apuntar el dolor de rodillas de hoy.');
   const t = nutritionTargets();
   if (t) {
@@ -265,7 +291,7 @@ function healthBriefing() {
    RENDER · Rutina de fuerza
    --------------------------------------------------------- */
 function renderStrength() {
-  const today = todayWorkout();
+  const todayIds = new Set(plansFor(TODAY).map((p) => p.id));
   const gyms = Object.entries(routine.workouts).filter(([, w]) => w.kind === 'gym');
   if (!gyms.length) {
     $('#strength').innerHTML = '<p class="muted small">No tienes entrenamientos de gimnasio. Añádelos en «Editar rutina».</p>';
@@ -276,10 +302,10 @@ function renderStrength() {
     const pct = w.items.length ? Math.round((done.length / w.items.length) * 100) : 0;
     const days = Object.entries(routine.days).filter(([, wid]) => wid === id).map(([d]) => WEEKDAYS[d].slice(0, 3)).join(' · ');
     return `
-      <div class="routine ${today.id === id ? 'is-today' : ''}" data-routine="${id}">
+      <div class="routine ${todayIds.has(id) ? 'is-today' : ''}" data-routine="${id}">
         <div class="routine-head">
           <span>${esc(w.label)}</span>
-          ${today.id === id ? tagHTML('salud', 'Hoy') : `<span class="muted small">${days}</span>`}
+          ${todayIds.has(id) ? tagHTML('salud', 'Hoy') : `<span class="muted small">${days}</span>`}
           <span class="muted small">${done.length}/${w.items.length}</span>
         </div>
         <div class="bar" style="--c:var(--c-salud)"><span style="--p:${pct}%"></span></div>
@@ -421,7 +447,7 @@ function renderCalendar() {
   const y = calCursor.getFullYear(), m = calCursor.getMonth();
   const offset = (new Date(y, m, 1).getDay() + 6) % 7; // lunes primero
   const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const stats = { gym: 0, gymPlanned: 0, run: 0, runKm: 0, bike: 0, bikeKm: 0 };
+  const stats = { gym: 0, gymPlanned: 0, run: 0, runKm: 0, bike: 0, bikeKm: 0, other: 0 };
   const runsManualByDay = {};
   (runsManual || []).forEach((r) => { runsManualByDay[r.date] = (runsManualByDay[r.date] || 0) + r.km; });
 
@@ -429,32 +455,32 @@ function renderCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(y, m, d);
     const key = dateKey(date);
-    const plan = workoutFor(date.getDay());
+    const plans = plansFor(key).filter((p) => p.kind !== 'rest');
+    const custom = calPlan[key] !== undefined;
     const acts = actsOn(key);
-    const did = {
-      gym: !!gymLog[key] || acts.some((a) => kindOf(a.type) === 'gym'),
-      run: acts.some((a) => kindOf(a.type) === 'run') || !!runsManualByDay[key],
-      bike: acts.some((a) => kindOf(a.type) === 'bike'),
-    };
+    const did = didOn(key);
+    const note = dayLog[key]?.note;
     const past = key < TODAY;
-    const counts = key <= TODAY;
-    if (counts && plan.kind === 'gym') stats.gymPlanned++;
+    if (key <= TODAY && plans.some((p) => p.kind === 'gym')) stats.gymPlanned++;
     if (did.gym) stats.gym++;
+    if (did.other) stats.other++;
     if (did.run) { stats.run++; stats.runKm += acts.filter((a) => kindOf(a.type) === 'run').reduce((s, a) => s + a.km, 0) + (runsManualByDay[key] || 0); }
     if (did.bike) { stats.bike++; stats.bikeKm += acts.filter((a) => kindOf(a.type) === 'bike').reduce((s, a) => s + a.km, 0); }
-    const missed = past && ((plan.kind === 'gym' && !did.gym) || (plan.kind === 'run' && !did.run));
+    const missed = past && plans.some((p) => p.kind in did && !did[p.kind]);
     const title = [
-      `${WEEKDAYS[date.getDay()]} ${d}: toca ${plan.label}`,
+      `${WEEKDAYS[date.getDay()]} ${d}: ${plans.length ? `toca ${plans.map((p) => p.label).join(' + ')}` : 'descanso'}${custom ? ' (elegido para este día)' : ''}`,
       ...acts.map((a) => `${a.name} (${a.km ? `${a.km} km` : fmtDuration(a.sec)})`),
-      gymLog[key] ? 'Gimnasio (marcado)' : '',
+      note ? `Nota: ${note}` : '',
     ].filter(Boolean).join('\n');
     cells += `
-      <button type="button" class="cal-day ${key === TODAY ? 'is-today' : ''} ${missed ? 'is-missed' : ''} ${key > TODAY ? 'is-future' : ''}"
-        data-date="${key}" title="${esc(title)}" ${key > TODAY ? 'disabled' : ''}>
-        <span class="cal-num">${d}</span>
-        <span class="cal-plan" style="--c:var(--c-${KIND_COLOR[plan.kind]})">${esc(plan.label)}</span>
+      <button type="button" class="cal-day ${key === TODAY ? 'is-today' : ''} ${missed ? 'is-missed' : ''} ${key > TODAY ? 'is-future' : ''} ${custom ? 'is-custom' : ''}"
+        data-date="${key}" title="${esc(title)}">
+        <span class="cal-num">${d}${note ? '<em class="cal-note" aria-label="Tiene nota">✎</em>' : ''}</span>
+        <span class="cal-plans">
+          ${plans.map((p) => `<span class="cal-plan" style="--c:var(--c-${KIND_COLOR[p.kind]})">${esc(p.label)}</span>`).join('') || '<span class="cal-plan" style="--c:var(--muted)">Descanso</span>'}
+        </span>
         <span class="cal-dots">
-          ${did.gym ? '<i style="--c:var(--c-salud)"></i>' : ''}${did.run ? '<i style="--c:var(--c-viaje)"></i>' : ''}${did.bike ? '<i style="--c:var(--c-proyecto)"></i>' : ''}
+          ${DONE_KINDS.filter((k) => did[k]).map((k) => `<i style="--c:var(--c-${KIND_COLOR[k]})"></i>`).join('')}
         </span>
       </button>`;
   }
@@ -464,7 +490,81 @@ function renderCalendar() {
   $('#calStats').innerHTML = `
     <div class="stat" style="--c:var(--c-salud)"><b>${stats.gym}${stats.gymPlanned ? `<small>/${stats.gymPlanned}</small>` : ''}</b><span>Días de gimnasio</span><i></i></div>
     <div class="stat" style="--c:var(--c-viaje)"><b>${stats.run}</b><span>Carreras · ${stats.runKm.toFixed(1)} km</span><i></i></div>
-    <div class="stat" style="--c:var(--c-proyecto)"><b>${stats.bike}</b><span>Salidas en bici · ${Math.round(stats.bikeKm)} km</span><i></i></div>`;
+    <div class="stat" style="--c:var(--c-proyecto)"><b>${stats.bike}</b><span>Salidas en bici · ${Math.round(stats.bikeKm)} km</span><i></i></div>
+    ${stats.other ? `<div class="stat" style="--c:var(--c-uni)"><b>${stats.other}</b><span>Otros entrenos</span><i></i></div>` : ''}`;
+}
+
+/* ---------------------------------------------------------
+   FICHA DE UN DÍA · qué vas a hacer y qué hiciste
+   --------------------------------------------------------- */
+function openDayEditor(key) {
+  const dialog = $('#dayDialog');
+  const date = parseKey(key);
+  const future = key > TODAY;
+  const planned = new Set(plansFor(key).map((p) => p.id));
+  const weekly = routine.workouts[routine.days[date.getDay()]];
+  dialog.dataset.date = key;
+
+  $('#dayTitle').textContent = capitalize(date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }));
+  $('#dayPlan').innerHTML = `
+    <div class="day-checks">
+      ${Object.entries(routine.workouts).filter(([, w]) => w.kind !== 'rest').map(([id, w]) => `
+        <label class="check" style="--c:var(--c-${KIND_COLOR[w.kind]})">
+          <input type="checkbox" value="${id}" ${planned.has(id) ? 'checked' : ''}><span>${esc(w.label)}</span>
+          <em>${KINDS[w.kind]}</em>
+        </label>`).join('')}
+    </div>
+    <p class="muted small">
+      ${calPlan[key] !== undefined ? 'Plan elegido solo para este día.' : `Según tu rutina semanal (${WEEKDAYS[date.getDay()].toLowerCase()}: ${esc(weekly?.label || 'Descanso')}).`}
+      <button class="link-btn" type="button" data-day-reset>Volver a la rutina semanal</button>
+    </p>`;
+
+  const did = didOn(key);
+  const run = (runsManual || []).find((r) => r.date === key);
+  $('#dayDoneWrap').hidden = future;
+  $('#dayDone').innerHTML = DONE_KINDS.map((k) => `
+    <label class="check" style="--c:var(--c-${KIND_COLOR[k]})">
+      <input type="checkbox" value="${k}" ${did[k] ? 'checked' : ''}><span>${k === 'other' ? 'Otro entreno' : KINDS[k]}</span>
+    </label>`).join('');
+  $('#dayRun').hidden = !did.run;
+  $('#dayRunKm').value = run?.km ?? '';
+  $('#dayRunTime').value = run ? `${Math.floor(run.sec / 60)}:${pad(run.sec % 60)}` : '';
+  $('#dayNote').value = dayLog[key]?.note || '';
+  dialog.showModal();
+}
+
+function saveDayEditor(key) {
+  // Plan: si coincide con la rutina semanal no se guarda nada (así los cambios de rutina le siguen afectando)
+  const ids = [...document.querySelectorAll('#dayPlan input:checked')].map((c) => c.value);
+  const weeklyId = routine.days[parseKey(key).getDay()];
+  const weeklyIds = routine.workouts[weeklyId]?.kind === 'rest' ? [] : [weeklyId];
+  calPlan = { ...calPlan };
+  if (ids.length === weeklyIds.length && ids.every((id) => weeklyIds.includes(id))) delete calPlan[key];
+  else calPlan[key] = ids;
+  store.set('calPlan', calPlan);
+
+  if (key <= TODAY) {
+    const done = [...document.querySelectorAll('#dayDone input:checked')].map((c) => c.value);
+    const note = $('#dayNote').value.trim();
+    dayLog = { ...dayLog };
+    if (done.length || note) dayLog[key] = { done, note }; else delete dayLog[key];
+    store.set('dayLog', dayLog);
+
+    gymLog = { ...gymLog };
+    if (done.includes('gym')) gymLog[key] = true; else delete gymLog[key];
+    store.set('gymLog', gymLog);
+
+    // Carrera de ese día: se guarda con km y tiempo para el plan de rodillas
+    const km = parseFloat($('#dayRunKm').value);
+    const time = $('#dayRunTime').value.trim();
+    const sec = /^\d{1,3}:\d{2}(:\d{2})?$/.test(time) ? parseTime(time) : 0;
+    const others = (runsManual || []).filter((r) => r.date !== key);
+    if (!done.includes('run')) runsManual = runsManual === null && !others.length ? null : others;
+    else if (km > 0 && sec > 0) runsManual = [...others, { date: key, km, sec }];
+    store.set('runs', runsManual);
+  }
+  renderHealth();
+  renderBriefing();
 }
 
 const fmtDuration = (sec) => `${Math.floor(sec / 3600) ? `${Math.floor(sec / 3600)} h ` : ''}${Math.round((sec % 3600) / 60)} min`;
@@ -703,15 +803,23 @@ function bindHealth() {
     renderKnee();
   });
 
-  // Calendario: tocar un día marca o desmarca que fuiste al gimnasio
+  // Calendario: tocar un día abre su ficha (qué vas a hacer y qué hiciste)
   $('#calendar').addEventListener('click', (e) => {
     const day = e.target.closest('.cal-day');
-    if (!day || day.disabled) return;
-    const key = day.dataset.date;
-    gymLog = { ...gymLog };
-    if (gymLog[key]) delete gymLog[key]; else gymLog[key] = true;
-    store.set('gymLog', gymLog);
-    renderCalendar();
+    if (day) openDayEditor(day.dataset.date);
+  });
+  $('#dayPlan').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-day-reset]')) return;
+    const key = $('#dayDialog').dataset.date;
+    const weekly = new Set([routine.days[parseKey(key).getDay()]]);
+    document.querySelectorAll('#dayPlan input[type="checkbox"]').forEach((c) => { c.checked = weekly.has(c.value); });
+  });
+  $('#dayDone').addEventListener('change', (e) => {
+    if (e.target.value === 'run') $('#dayRun').hidden = !e.target.checked;
+  });
+  $('#dayForm').addEventListener('submit', (e) => {
+    if (e.submitter?.value !== 'save') return;
+    saveDayEditor($('#dayDialog').dataset.date);
   });
   document.querySelectorAll('[data-cal-nav]').forEach((b) => b.addEventListener('click', () => {
     calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + Number(b.dataset.calNav), 1);

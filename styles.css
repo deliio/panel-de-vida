@@ -563,3 +563,23 @@ code { font: 12px var(--mono); background: var(--hover); padding: 1px 5px; borde
   .cal-stats { flex-direction: column; }
   .form-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- Calendario: plan por día y ficha del día ---------- */
+.cal-plans { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cal-day.is-custom .cal-plans { border-left: 2px solid var(--text-2); padding-left: 4px; }
+.cal-day.is-future { opacity: .8; }
+.cal-note { font-style: normal; font-size: 10px; color: var(--muted); margin-left: 4px; }
+.day-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0 12px; }
+.day-checks .check em { font-size: 11px; }
+.day-run { margin: 8px 0; }
+.day-note {
+  width: 100%; margin-top: 8px; resize: vertical; font: 13px/1.5 var(--font);
+  background: var(--bg); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 8px 10px;
+}
+#dayPlan .muted { margin-top: 6px; }
+@media (max-width: 640px) {
+  .cal-plans { display: none; }
+}
+.day-checks .check input:checked + span { color: var(--text); text-decoration: none; }
+#dayPlan .link-btn { text-decoration: underline; }
+#dayForm .dialog-foot { margin-top: 14px; }
