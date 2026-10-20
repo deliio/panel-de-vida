@@ -28,20 +28,7 @@ const CONFIG = {
     detail: 'Vuelo a Milán Malpensa (MXP) · 4 noches',
   },
 
-  paceTargetSec: 6 * 60 + 10, // objetivo: < 6:10 /km
-  weeklyKmGoal: 25,
-  proteinGoal: 140, // gramos/día
-
-  // Plan semanal (0 = domingo ... 6 = sábado). type: upper | legs | run | rest
-  trainingPlan: {
-    0: { type: 'rest', label: 'Descanso activo' },
-    1: { type: 'upper', label: 'Fuerza · Tren superior' },
-    2: { type: 'run', label: 'Running · Series' },
-    3: { type: 'legs', label: 'Fuerza · Piernas' },
-    4: { type: 'run', label: 'Running · Rodaje suave' },
-    5: { type: 'upper', label: 'Fuerza · Tren superior' },
-    6: { type: 'run', label: 'Running · Tirada larga' },
-  },
+  // Salud y deporte: plan de rodillas, ritmo y rutina están en health.js
 
   // Categorías con su color por defecto (editables desde el botón "Colores")
   categories: {
@@ -257,51 +244,6 @@ const DEFAULT_TASKS = [
   { id: uid(), title: 'Resumen apuntes Econometría', cat: 'uni', status: 'done', due: dateKey(addDays(-1)) },
 ];
 
-const STRENGTH = {
-  upper: {
-    label: 'Tren superior',
-    items: [
-      { name: 'Press banca', sets: '4×8' },
-      { name: 'Dominadas', sets: '4×6' },
-      { name: 'Press militar', sets: '3×10' },
-      { name: 'Remo con barra', sets: '4×8' },
-      { name: 'Fondos', sets: '3×12' },
-    ],
-  },
-  legs: {
-    label: 'Piernas',
-    items: [
-      { name: 'Sentadilla', sets: '4×6' },
-      { name: 'Peso muerto rumano', sets: '3×8' },
-      { name: 'Prensa', sets: '3×12' },
-      { name: 'Zancadas', sets: '3×10' },
-      { name: 'Gemelos', sets: '4×15' },
-    ],
-  },
-};
-
-/* 🔌 API · STRAVA
-   Sustituye DEFAULT_RUNS por GET https://www.strava.com/api/v3/athlete/activities
-   (OAuth desde tu backend) filtrando type === 'Run' y mapeando a
-   { date: 'YYYY-MM-DD', km: distance / 1000, sec: moving_time }. */
-const DEFAULT_RUNS = [
-  { date: dateKey(addDays(-13)), km: 6.2, sec: 39 * 60 + 40 },
-  { date: dateKey(addDays(-11)), km: 5.0, sec: 31 * 60 + 5 },
-  { date: dateKey(addDays(-9)), km: 10.1, sec: 63 * 60 + 30 },
-  { date: dateKey(addDays(-6)), km: 5.5, sec: 33 * 60 + 50 },
-  { date: dateKey(addDays(-4)), km: 6.0, sec: 36 * 60 + 18 },
-  { date: dateKey(addDays(-2)), km: 7.2, sec: 44 * 60 + 2 },
-  { date: dateKey(addDays(-1)), km: 5.2, sec: 31 * 60 + 25 },
-];
-
-const MEALS = [
-  { name: 'Desayuno · yogur griego + avena', g: 25 },
-  { name: 'Comida · pollo, arroz y verduras', g: 40 },
-  { name: 'Merienda · batido de proteína', g: 25 },
-  { name: 'Cena · salmón o tortilla de claras', g: 35 },
-  { name: 'Snack · requesón o frutos secos', g: 15 },
-];
-
 /* 🔌 API · GOOGLE CALENDAR (ya conectado en google.js)
    Mientras no conectes Google se muestran estos eventos de ejemplo.
    Al conectar, GoogleSync.loadCalendar() los sustituye por los reales
@@ -344,7 +286,7 @@ const TOOLS = [
 /* ---------------------------------------------------------
    ESTADO (persistido en localStorage)
    --------------------------------------------------------- */
-let TODAY, WEEK, tasks, readEmails, runs, strengthDone, protein, tripChecks, roadmapDone;
+let TODAY, WEEK, tasks, readEmails, strengthDone, tripChecks, roadmapDone;
 
 // Se vuelve a llamar al llegar datos de otro dispositivo o al cambiar de día
 function loadState() {
@@ -352,11 +294,9 @@ function loadState() {
   WEEK = dateKey(mondayOf());
   tasks = store.get('tasks', DEFAULT_TASKS);
   readEmails = store.get('readEmails', []);
-  runs = store.get('runs', DEFAULT_RUNS);
-  strengthDone = store.get(`strength:${WEEK}`, { upper: [], legs: [] });
-  protein = store.get(`protein:${TODAY}`, { meals: [], extra: 0 });
   tripChecks = store.get('tripChecks', []);
   roadmapDone = store.get('roadmap', []);
+  loadHealthState(); // health.js
 }
 
 // Añade los próximos pasos de la hoja de ruta al Kanban una sola vez.
@@ -429,13 +369,11 @@ function renderBriefing() {
   const pending = tasks.filter((t) => t.status !== 'done');
   const doing = tasks.filter((t) => t.status === 'doing').length;
   const dueSoon = pending.filter((t) => t.due && daysUntil(parseKey(t.due)) <= 2).length;
-  const training = CONFIG.trainingPlan[now.getDay()];
+  const training = todayWorkout(); // health.js
   const unread = emails.filter((e) => !readEmails.includes(e.id));
   const milanDays = Math.max(0, Math.floor((CONFIG.milanTrip.start - now) / 86400000));
 
-  const trainingText = training.type === 'rest'
-    ? 'Hoy <strong>no toca entrenamiento</strong>: día de descanso activo (movilidad y paseo).'
-    : `Hoy toca <strong>${training.label}</strong>${training.type === 'run' ? ` — ritmo objetivo por debajo de ${fmtPace(CONFIG.paceTargetSec)} /km` : ''}.`;
+  const trainingText = healthBriefing(); // health.js
 
   const todayEvents = events.filter((e) => daysUntil(e.date) === 0);
   const agendaText = todayEvents.length
@@ -452,7 +390,7 @@ function renderBriefing() {
 
   const stats = [
     { v: pending.length, l: 'Tareas pendientes', c: 'uni' },
-    { v: training.type === 'rest' ? '—' : '✓', l: training.type === 'rest' ? 'Descanso' : 'Entreno hoy', c: 'salud' },
+    { v: { gym: '🏋️', run: '🏃', bike: '🚴', rest: '—' }[training.kind], l: `Hoy: ${esc(training.label)}`, c: 'salud' },
     { v: unread.length, l: 'Correos sin leer', c: 'urgente' },
     { v: milanDays, l: 'Días para Milán', c: 'viaje' },
   ];
@@ -673,132 +611,8 @@ function bindKanban() {
 }
 
 /* ---------------------------------------------------------
-   3 · SALUD Y DEPORTE
+   3 · SALUD Y DEPORTE → health.js
    --------------------------------------------------------- */
-function renderStrength() {
-  const todayType = CONFIG.trainingPlan[new Date().getDay()].type;
-  $('#strength').innerHTML = Object.entries(STRENGTH).map(([key, r]) => {
-    const done = strengthDone[key] || [];
-    const pct = Math.round((done.length / r.items.length) * 100);
-    return `
-      <div class="routine ${todayType === key ? 'is-today' : ''}" data-routine="${key}">
-        <div class="routine-head">
-          <span>${r.label}</span>
-          ${todayType === key ? tagHTML('salud', 'Hoy') : ''}
-          <span class="muted small">${done.length}/${r.items.length}</span>
-        </div>
-        <div class="bar" style="--c:var(--c-salud)"><span style="--p:${pct}%"></span></div>
-        <ul class="checklist">
-          ${r.items.map((it, i) => `
-            <li><label class="check">
-              <input type="checkbox" data-i="${i}" ${done.includes(i) ? 'checked' : ''}>
-              <span>${esc(it.name)}</span><em>${esc(it.sets)}</em>
-            </label></li>`).join('')}
-        </ul>
-      </div>`;
-  }).join('');
-}
-
-function renderRunning() {
-  const sorted = [...runs].sort((a, b) => a.date.localeCompare(b.date));
-  const last = sorted.at(-1);
-  const recent = sorted.slice(-5);
-  const avgPace = recent.reduce((s, r) => s + r.sec, 0) / recent.reduce((s, r) => s + r.km, 0);
-  const monday = mondayOf();
-  const weekKm = sorted.filter((r) => parseKey(r.date) >= monday).reduce((s, r) => s + r.km, 0);
-  const target = CONFIG.paceTargetSec;
-  const lastPace = last ? last.sec / last.km : 0;
-  const okUnder = (p) => p < target;
-
-  $('#runKpis').innerHTML = `
-    <div class="kpi"><b class="${okUnder(lastPace) ? 'ok' : 'bad'}">${last ? fmtPace(lastPace) : '—'}</b><span>Último ritmo /km</span></div>
-    <div class="kpi"><b class="${okUnder(avgPace) ? 'ok' : 'bad'}">${fmtPace(avgPace)}</b><span>Media últimas 5</span></div>
-    <div class="kpi"><b>${weekKm.toFixed(1)}</b><span>km esta semana</span></div>`;
-
-  // Gráfico de barras: barra más alta = ritmo más rápido. Línea discontinua = objetivo.
-  const SLOW = 7 * 60 + 30, FAST = 4 * 60 + 45, MAX_H = 64;
-  const hFor = (p) => clamp((SLOW - p) / (SLOW - FAST), 0.08, 1) * MAX_H;
-  const last8 = sorted.slice(-8);
-  $('#paceChart').innerHTML = `
-    ${last8.map((r) => {
-      const p = r.sec / r.km;
-      const d = parseKey(r.date);
-      return `<div class="col" title="${r.km} km · ${fmtPace(p)} /km">
-        <em>${fmtPace(p)}</em>
-        <i class="${okUnder(p) ? 'ok' : ''}" style="height:${hFor(p)}px"></i>
-        <small>${d.getDate()}/${d.getMonth() + 1}</small>
-      </div>`;
-    }).join('')}
-    <div class="target" style="bottom:${18 + hFor(target)}px"><span>${fmtPace(target)}</span></div>`;
-
-  // Progreso semanal de km (se inserta antes del gráfico)
-  let weekly = $('#weeklyKm');
-  if (!weekly) {
-    weekly = document.createElement('div');
-    weekly.id = 'weeklyKm';
-    weekly.className = 'weekly';
-    $('#paceChart').before(weekly);
-  }
-  const pct = clamp((weekKm / CONFIG.weeklyKmGoal) * 100, 0, 100);
-  weekly.innerHTML = `
-    <div class="muted small"><span>Volumen semanal</span><span>${weekKm.toFixed(1)} / ${CONFIG.weeklyKmGoal} km</span></div>
-    <div class="bar" style="--c:var(--c-salud)"><span style="--p:${pct}%"></span></div>`;
-}
-
-function renderProtein() {
-  const total = protein.meals.reduce((s, i) => s + MEALS[i].g, 0) + protein.extra;
-  const pct = clamp((total / CONFIG.proteinGoal) * 100, 0, 100);
-  const ring = $('#proteinRing');
-  ring.style.setProperty('--p', pct);
-  $('#proteinValue').innerHTML = `${total}g<small>de ${CONFIG.proteinGoal}g</small>`;
-  ring.title = total >= CONFIG.proteinGoal ? '¡Objetivo cumplido!' : `Faltan ${CONFIG.proteinGoal - total} g`;
-
-  $('#meals').innerHTML = MEALS.map((m, i) => `
-    <li><label class="check">
-      <input type="checkbox" data-i="${i}" ${protein.meals.includes(i) ? 'checked' : ''}>
-      <span>${esc(m.name)}</span><em>${m.g} g</em>
-    </label></li>`).join('');
-}
-
-function bindHealth() {
-  const start = mondayOf();
-  $('#weekLabel').textContent = `Semana del ${start.getDate()}/${start.getMonth() + 1}`;
-
-  $('#strength').addEventListener('change', (e) => {
-    const key = e.target.closest('[data-routine]').dataset.routine;
-    const i = Number(e.target.dataset.i);
-    const list = strengthDone[key] || (strengthDone[key] = []);
-    e.target.checked ? list.push(i) : list.splice(list.indexOf(i), 1);
-    store.set(`strength:${WEEK}`, strengthDone);
-    renderStrength();
-  });
-
-  $('#runForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const km = parseFloat($('#runKm').value);
-    const sec = parseTime($('#runTime').value);
-    if (!km || !sec) return;
-    runs.push({ date: TODAY, km, sec });
-    store.set('runs', runs);
-    e.target.reset();
-    renderRunning();
-  });
-
-  $('#meals').addEventListener('change', (e) => {
-    const i = Number(e.target.dataset.i);
-    protein.meals = e.target.checked ? [...protein.meals, i] : protein.meals.filter((x) => x !== i);
-    store.set(`protein:${TODAY}`, protein);
-    renderProtein();
-  });
-
-  $('.protein-actions').addEventListener('click', (e) => {
-    const v = e.target.closest('[data-add]')?.dataset.add;
-    if (!v) return;
-    protein = v === 'reset' ? { meals: [], extra: 0 } : { ...protein, extra: protein.extra + Number(v) };
-    store.set(`protein:${TODAY}`, protein);
-    renderProtein();
-  });
-}
 
 /* ---------------------------------------------------------
    4 · AGENDA Y VIAJES
@@ -971,9 +785,7 @@ function renderAll() {
   applyColors();
   renderBriefing();
   renderKanban();
-  renderStrength();
-  renderRunning();
-  renderProtein();
+  renderHealth(); // health.js
   renderAgenda();
   renderTripChecklist();
   renderRoadmap();
@@ -1009,6 +821,7 @@ function init() {
     onSynced: seedRoadmapTasks, // tras traer los datos de Drive
     onRemoteData: () => { loadState(); renderAll(); }, // cambios hechos en otro dispositivo
   });
+  loadStrava(); // health.js · tus actividades a través del puente de Strava
 
   // App instalable (PWA): funciona sin conexión y se puede añadir a la pantalla de inicio
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

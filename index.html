@@ -42,6 +42,14 @@
         <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
         <span>Salud & Deporte</span>
       </a>
+      <a href="#entrenos" class="nav-link">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 13h2M14 13h2M8 17h2"/></svg>
+        <span>Entrenos</span>
+      </a>
+      <a href="#nutricion" class="nav-link">
+        <svg viewBox="0 0 24 24"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M17 3c-2 2-3 4-3 7h3v11"/></svg>
+        <span>Nutrición</span>
+      </a>
       <a href="#agenda" class="nav-link">
         <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
         <span>Agenda & Viajes</span>
@@ -128,18 +136,25 @@
 
       <!-- 3 · TRACKER DE SALUD Y DEPORTE -->
       <section class="card span-3" id="salud">
-        <div class="card-head"><h2>Salud & deporte</h2><span class="muted small" id="weekLabel"></span></div>
+        <div class="card-head">
+          <h2>Salud & deporte</h2>
+          <div class="head-actions">
+            <span class="muted small" id="weekLabel"></span>
+            <button class="btn btn-sm btn-ghost" id="editRoutine" type="button">Editar rutina</button>
+          </div>
+        </div>
 
         <div class="health-grid">
-          <!-- Fuerza -->
+          <!-- Gimnasio (rutina editable) -->
           <div class="panel">
-            <h3>Rutina de fuerza</h3>
+            <h3>Rutina de gimnasio</h3>
             <div id="strength"></div>
           </div>
 
-          <!-- Running -->
+          <!-- Running (Strava + manual) -->
           <div class="panel">
-            <h3>Running <span class="tag" style="--c:var(--c-salud)">Objetivo &lt; 6:10 /km</span></h3>
+            <h3>Running <span class="tag" style="--c:var(--c-salud)" id="runTag"></span></h3>
+            <p class="muted small run-source" id="runSource"></p>
             <div class="run-kpis" id="runKpis"></div>
             <div class="pace-chart" id="paceChart"></div>
             <form class="run-form" id="runForm" autocomplete="off">
@@ -149,18 +164,77 @@
             </form>
           </div>
 
-          <!-- Nutrición -->
-          <div class="panel">
-            <h3>Nutrición alta en proteínas</h3>
-            <div class="protein">
-              <div class="ring" id="proteinRing"><span id="proteinValue">0g</span></div>
-              <div class="protein-actions">
-                <button class="btn btn-sm" data-add="10" type="button">+10 g</button>
-                <button class="btn btn-sm" data-add="25" type="button">+25 g</button>
-                <button class="btn btn-sm btn-ghost" data-add="reset" type="button">Reiniciar</button>
-              </div>
+          <!-- Rodillas: dolor diario y plan de vuelta a correr -->
+          <div class="panel" id="kneePanel"></div>
+        </div>
+      </section>
+
+      <!-- CALENDARIO DE ENTRENOS -->
+      <section class="card span-3" id="entrenos">
+        <div class="card-head">
+          <h2>Calendario de entrenos</h2>
+          <div class="head-actions day-nav">
+            <button class="icon-btn" data-cal-nav="-1" type="button" aria-label="Mes anterior">‹</button>
+            <span id="calTitle"></span>
+            <button class="icon-btn" data-cal-nav="1" type="button" aria-label="Mes siguiente">›</button>
+          </div>
+        </div>
+        <div class="cal-layout">
+          <div>
+            <div class="calendar" id="calendar"></div>
+            <div class="legend cal-legend">
+              <span><i style="--c:var(--c-salud)"></i>Gimnasio</span>
+              <span><i style="--c:var(--c-viaje)"></i>Running</span>
+              <span><i style="--c:var(--c-proyecto)"></i>Bici</span>
+              <span class="muted">Toca un día para marcar que fuiste al gimnasio</span>
             </div>
-            <ul class="checklist" id="meals"></ul>
+          </div>
+          <div class="cal-stats" id="calStats"></div>
+        </div>
+      </section>
+
+      <!-- NUTRICIÓN Y CALORÍAS -->
+      <section class="card span-3" id="nutricion">
+        <div class="card-head">
+          <h2>Nutrición & calorías</h2>
+          <div class="head-actions"><button class="btn btn-sm btn-ghost" type="button" data-open-profile>Mis datos</button></div>
+        </div>
+        <div class="nutri-grid">
+          <div class="panel" id="nutriSummary"></div>
+
+          <div class="panel">
+            <h3>Añadir comida</h3>
+            <form id="foodForm" autocomplete="off">
+              <div class="food-row">
+                <select id="foodMeal" aria-label="Comida del día">
+                  <option>Desayuno</option><option>Comida</option><option>Merienda</option><option>Cena</option><option>Snack</option>
+                </select>
+                <input type="search" id="foodSearch" placeholder="Busca: pollo, arroz, yogur…" aria-label="Buscar alimento">
+              </div>
+              <ul class="food-results" id="foodResults"></ul>
+              <button class="link-btn" id="foodOff" type="button">Buscar en Open Food Facts (productos envasados) ↗</button>
+              <div class="food-selected" id="foodSelected" hidden></div>
+              <details class="food-manual">
+                <summary>Añadir a mano</summary>
+                <div class="food-row">
+                  <input type="text" id="mfName" placeholder="Nombre" maxlength="60">
+                  <input type="number" id="mfKcal" placeholder="kcal" min="0">
+                  <input type="number" id="mfProt" placeholder="prot. g" min="0" step="0.1">
+                  <button class="btn btn-sm" id="manualFood" type="button">Añadir</button>
+                </div>
+              </details>
+            </form>
+          </div>
+
+          <div class="panel">
+            <h3>Comidas
+              <span class="day-nav">
+                <button class="icon-btn" data-food-nav="-1" type="button" aria-label="Día anterior">‹</button>
+                <span id="foodDayLabel">Hoy</span>
+                <button class="icon-btn" data-food-nav="1" type="button" aria-label="Día siguiente">›</button>
+              </span>
+            </h3>
+            <div id="foodList"></div>
           </div>
         </div>
       </section>
@@ -208,9 +282,90 @@
   </form>
 </dialog>
 
+<!-- ============ RUTINA SEMANAL ============ -->
+<dialog class="dialog dialog-wide" id="routineDialog">
+  <form method="dialog">
+    <div class="card-head"><h2>Mi rutina semanal</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
+    <h3 class="dlg-sub">Qué toca cada día</h3>
+    <div class="week-grid" id="routineDays"></div>
+    <h3 class="dlg-sub">Entrenamientos</h3>
+    <p class="muted small">En los de gimnasio, un ejercicio por línea: <code>Press banca | 4×8</code></p>
+    <div id="routineWorkouts"></div>
+    <button class="btn btn-sm btn-ghost" id="addWorkout" type="button">+ Añadir entrenamiento</button>
+    <div class="dialog-foot">
+      <button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn btn-primary" id="saveRoutine" type="button">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ MIS DATOS (calorías) ============ -->
+<dialog class="dialog" id="profileDialog">
+  <form method="dialog" id="profileForm">
+    <div class="card-head"><h2>Mis datos</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
+    <p class="muted small">Se guardan solo en tu navegador y en tu Drive privado, nunca en GitHub.</p>
+    <div class="form-grid">
+      <label>Sexo<select name="sex"><option value="m">Hombre</option><option value="f">Mujer</option></select></label>
+      <label>Edad<input type="number" name="age" min="14" max="99" required></label>
+      <label>Altura (cm)<input type="number" name="height" min="120" max="230" required></label>
+      <label>Peso (kg)<input type="number" name="weight" min="35" max="250" step="0.1" required></label>
+      <label class="span-all">Actividad (con todo lo que entrenas)
+        <select name="activity">
+          <option value="1.2">Sedentaria · casi no entreno</option>
+          <option value="1.375">Ligera · 1–3 días a la semana</option>
+          <option value="1.55">Moderada · 3–5 días a la semana</option>
+          <option value="1.725">Alta · 6–7 días a la semana</option>
+          <option value="1.9">Muy alta · doble sesión o trabajo físico</option>
+        </select>
+      </label>
+      <label>Déficit
+        <select name="deficit">
+          <option value="0">Mantener (0 kcal)</option>
+          <option value="250">Suave (−250 kcal)</option>
+          <option value="400">Moderado (−400 kcal)</option>
+          <option value="500">−500 kcal</option>
+          <option value="750">Agresivo (−750 kcal)</option>
+        </select>
+      </label>
+      <label>Proteína (g por kg)
+        <select name="proteinPerKg">
+          <option value="1.6">1,6 g/kg</option>
+          <option value="1.8">1,8 g/kg</option>
+          <option value="2">2,0 g/kg</option>
+          <option value="2.2">2,2 g/kg</option>
+        </select>
+      </label>
+    </div>
+    <p class="muted small">Cálculo: metabolismo basal (fórmula Mifflin-St Jeor) × actividad − déficit. Es una estimación.</p>
+    <div class="dialog-foot">
+      <button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn btn-primary" value="save">Guardar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ STRAVA ============ -->
+<dialog class="dialog" id="stravaDialog">
+  <form method="dialog" id="stravaForm">
+    <div class="card-head"><h2>Conectar Strava</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
+    <p class="muted small">Pega la URL de tu puente de Google Apps Script y su clave. Los pasos están en el README del repositorio (sección «Conectar Strava»).</p>
+    <div class="form-grid">
+      <label class="span-all">URL del puente<input type="url" id="stravaUrl" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <label class="span-all">Clave del panel<input type="password" id="stravaKey" autocomplete="off"></label>
+    </div>
+    <p class="small muted" id="stravaStatus"></p>
+    <div class="dialog-foot">
+      <button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn btn-primary" value="save">Guardar y conectar</button>
+    </div>
+  </form>
+</dialog>
+
+
 <!-- Google Identity Services (inicio de sesión para Calendar y Drive) -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="google.js"></script>
 <script src="app.js"></script>
+<script src="health.js"></script>
 </body>
 </html>
