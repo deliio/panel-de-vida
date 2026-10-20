@@ -26,6 +26,7 @@
   --c-urgente: #ee7f8d;
   --c-salud: #b29cf7;
   --c-viaje: #6ec7dd;
+  --c-finanzas: #d99ac4;
 
   /* Estados */
   --ok: #63cfa5;
@@ -362,4 +363,29 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.7); }
   .card { padding: 16px; }
   .sidebar-foot .btn { font-size: 0; gap: 0; }
   .sidebar-foot .btn svg { width: 18px; height: 18px; }
+}
+
+/* ---------- Conexión con Google ---------- */
+.header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.sync-btn[data-state="ok"] .sync-dot { background: var(--ok); }
+.sync-btn[data-state="sync"] .sync-dot { background: var(--c-personal); animation: pulse 1s ease-in-out infinite; }
+.sync-btn[data-state="expired"] .sync-dot,
+.sync-btn[data-state="setup"] .sync-dot { background: var(--c-personal); }
+.sync-btn[data-state="error"] .sync-dot { background: var(--bad); }
+@keyframes pulse { 50% { opacity: .3; } }
+
+.nav-ext { margin-top: 10px; border-top: 1px solid var(--border); border-radius: 0 0 var(--radius-sm) var(--radius-sm); padding-top: 12px; }
+.nav-ext svg { color: var(--c-finanzas); }
+.events .empty { list-style: none; }
+
+/* ---------- Modo app (PWA instalada) ---------- */
+@media (display-mode: standalone) {
+  .main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 820px) {
+  .sidebar { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .nav-ext { margin: 0; border: 0; padding-top: 8px; border-radius: var(--radius-sm); }
+  .header-actions { width: 100%; }
+  .header-actions .btn { flex: 1; }
 }

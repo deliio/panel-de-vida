@@ -12,6 +12,14 @@
 const CONFIG = {
   userName: 'Delio',
 
+  /* 🔌 API · GOOGLE (Calendar + sincronización móvil/ordenador)
+     Pega aquí el "ID de cliente" OAuth de tu proyecto de Google Cloud
+     (termina en .apps.googleusercontent.com). No es secreto: puede ir en el código.
+     Los pasos para crearlo están en el README. */
+  googleClientId: '',
+
+  financeUrl: 'https://deliio.github.io/finanzas/',
+
   // Viaje a Milán (cambia las fechas por las de tu billete)
   milanTrip: {
     start: new Date('2026-12-04T07:00:00'),
@@ -43,6 +51,7 @@ const CONFIG = {
     urgente:  { label: 'Urgente',     color: '#ee7f8d' },
     salud:    { label: 'Salud',       color: '#b29cf7' },
     viaje:    { label: 'Viaje',       color: '#6ec7dd' },
+    finanzas: { label: 'Finanzas',    color: '#d99ac4' },
   },
 
   reminders: [
@@ -77,6 +86,7 @@ const fmtRel = (d) => {
   if (n < 0) return `Venció hace ${-n} d`;
   return `En ${n} días`;
 };
+const fmtHour = (d) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 const fmtPace = (sec) => { const s = Math.round(sec); return `${Math.floor(s / 60)}:${pad(s % 60)}`; };
 const parseTime = (str) => { // "mm:ss" o "h:mm:ss" -> segundos
   const p = str.split(':').map(Number);
@@ -91,6 +101,7 @@ const store = {
   },
   set(key, value) {
     try { localStorage.setItem(`lifedash:${key}`, JSON.stringify(value)); } catch { /* sin persistencia */ }
+    window.GoogleSync?.markDirty(); // sube el cambio a Google Drive si estás conectado
   },
 };
 
@@ -170,14 +181,10 @@ const MEALS = [
   { name: 'Snack · requesón o frutos secos', g: 15 },
 ];
 
-/* 🔌 API · GOOGLE CALENDAR
-   Sustituye MOCK_EVENTS por:
-     const res = await gapi.client.calendar.events.list({
-       calendarId: 'primary', timeMin: new Date().toISOString(),
-       singleEvents: true, orderBy: 'startTime', maxResults: 10,
-     });
-   y mapea res.result.items a { title: summary, date: new Date(start.dateTime || start.date), place: location, cat }.
-   Puedes deducir "cat" por el color del evento (colorId) o por palabras clave del título. */
+/* 🔌 API · GOOGLE CALENDAR (ya conectado en google.js)
+   Mientras no conectes Google se muestran estos eventos de ejemplo.
+   Al conectar, GoogleSync.loadCalendar() los sustituye por los reales
+   y categorize() les pone la etiqueta según palabras del título. */
 const MOCK_EVENTS = [
   { title: 'Reunión de proyecto (Teams)', date: addDays(1, setTime(10, 0)), place: 'Online', cat: 'proyecto' },
   { title: 'Entrega Práctica 3 · BBDD', date: addDays(2, setTime(23, 59)), place: 'Moovi', cat: 'uni' },
@@ -188,9 +195,23 @@ const MOCK_EVENTS = [
 ];
 function setTime(h, m) { const d = new Date(); d.setHours(h, m, 0, 0); return d; }
 
+const CATEGORY_RULES = [
+  ['viaje', /vuelo|viaje|mil[aá]n|hotel|aeropuerto|\btren\b/],
+  ['urgente', /examen|parcial|urgente/],
+  ['uni', /\bclase|entrega|pr[aá]ctica|tutor[ií]a|\buni(versidad)?\b|moovi|seminario|\btfg\b/],
+  ['salud', /gym|gimnasio|entreno|carrera|running|correr|fuerza|m[eé]dico|fisio/],
+  ['proyecto', /reuni[oó]n|proyecto|power ?bi|fabric|\bcall\b|\bmeet/],
+  ['finanzas', /pago|factura|banco|recibo|alquiler|n[oó]mina/],
+];
+const categorize = (title) => CATEGORY_RULES.find(([, re]) => re.test(title.toLowerCase()))?.[0] || 'personal';
+
+let events = MOCK_EVENTS;
+let calendarSyncedAt = null; // null = datos simulados
+
 const TRIP_CHECKLIST = ['Check-in online', 'DNI / pasaporte', 'Reservar Última Cena (Da Vinci)', 'Abrigo y paraguas'];
 
 const TOOLS = [
+  { name: 'Finanzas', desc: 'Mi app de finanzas', url: CONFIG.financeUrl, icon: '€', cat: 'finanzas' },
   { name: 'Moovi', desc: 'Campus virtual UVigo', url: 'https://moovi.uvigo.gal', icon: 'Mo', cat: 'uni' },
   { name: 'Gmail', desc: 'Correo', url: 'https://mail.google.com', icon: 'G', cat: 'urgente' },
   { name: 'Excel', desc: 'Hojas de cálculo', url: 'https://www.office.com/launch/excel', icon: 'X', cat: 'proyecto' },
@@ -202,15 +223,19 @@ const TOOLS = [
 /* ---------------------------------------------------------
    ESTADO (persistido en localStorage)
    --------------------------------------------------------- */
-const TODAY = dateKey();
-const WEEK = dateKey(mondayOf());
+let TODAY, WEEK, tasks, readEmails, runs, strengthDone, protein, tripChecks;
 
-let tasks = store.get('tasks', DEFAULT_TASKS);
-let readEmails = store.get('readEmails', []);
-let runs = store.get('runs', DEFAULT_RUNS);
-let strengthDone = store.get(`strength:${WEEK}`, { upper: [], legs: [] });
-let protein = store.get(`protein:${TODAY}`, { meals: [], extra: 0 });
-let tripChecks = store.get('tripChecks', []);
+// Se vuelve a llamar al llegar datos de otro dispositivo o al cambiar de día
+function loadState() {
+  TODAY = dateKey();
+  WEEK = dateKey(mondayOf());
+  tasks = store.get('tasks', DEFAULT_TASKS);
+  readEmails = store.get('readEmails', []);
+  runs = store.get('runs', DEFAULT_RUNS);
+  strengthDone = store.get(`strength:${WEEK}`, { upper: [], legs: [] });
+  protein = store.get(`protein:${TODAY}`, { meals: [], extra: 0 });
+  tripChecks = store.get('tripChecks', []);
+}
 
 /* ---------------------------------------------------------
    COLOR CODING PERSONALIZABLE
@@ -254,7 +279,7 @@ function pickReminder(pending) {
     .sort((a, b) => a.due.localeCompare(b.due))[0];
   if (soonTask) return `${esc(soonTask.title)} · <strong>${fmtRel(parseKey(soonTask.due)).toLowerCase()}</strong>.`;
 
-  const soonEvent = MOCK_EVENTS.find((e) => daysUntil(e.date) >= 0 && daysUntil(e.date) <= 2);
+  const soonEvent = events.find((e) => daysUntil(e.date) >= 0 && daysUntil(e.date) <= 2);
   if (soonEvent) return `${esc(soonEvent.title)} · ${fmtRel(soonEvent.date).toLowerCase()}.`;
 
   return CONFIG.reminders[new Date().getDate() % CONFIG.reminders.length];
@@ -278,8 +303,14 @@ function renderBriefing() {
     ? 'Hoy <strong>no toca entrenamiento</strong>: día de descanso activo (movilidad y paseo).'
     : `Hoy toca <strong>${training.label}</strong>${training.type === 'run' ? ` — ritmo objetivo por debajo de ${fmtPace(CONFIG.paceTargetSec)} /km` : ''}.`;
 
+  const todayEvents = events.filter((e) => daysUntil(e.date) === 0);
+  const agendaText = todayEvents.length
+    ? `Hoy tienes <strong>${todayEvents.length} evento${todayEvents.length > 1 ? 's' : ''}</strong>: ${todayEvents.slice(0, 3).map((e) => `${e.allDay ? '' : `${fmtHour(e.date)} `}${esc(e.title)}`).join(' · ')}${todayEvents.length > 3 ? '…' : ''}.`
+    : 'Hoy no tienes eventos en el calendario.';
+
   $('#briefingText').innerHTML = `
     <p>Tienes <strong>${pending.length} tarea${pending.length !== 1 ? 's' : ''} pendiente${pending.length !== 1 ? 's' : ''}</strong>${doing ? ` (${doing} en proceso)` : ''}${dueSoon ? ` y <strong>${dueSoon}</strong> vence${dueSoon > 1 ? 'n' : ''} en 2 días o menos` : ''}.</p>
+    <p>${agendaText}</p>
     <p>${trainingText}</p>
     <p>${summarizeEmails(unread)}</p>
     <p class="reminder">⏰ Recordatorio: ${pickReminder(pending)}</p>`;
@@ -546,11 +577,19 @@ function bindHealth() {
    4 · AGENDA Y VIAJES
    --------------------------------------------------------- */
 function renderAgenda() {
-  const upcoming = MOCK_EVENTS
-    .filter((e) => e.date >= startOfDay(new Date()))
+  const upcoming = events
+    .filter((e) => (e.end || e.date) >= new Date() || daysUntil(e.date) === 0)
     .sort((a, b) => a.date - b.date)
     .slice(0, 6);
 
+  $('#agendaSource').textContent = calendarSyncedAt
+    ? `Google Calendar · ${fmtHour(calendarSyncedAt)}`
+    : 'Ejemplo · conecta Google';
+
+  if (!upcoming.length) {
+    $('#events').innerHTML = '<li class="empty">No tienes eventos próximos.</li>';
+    return;
+  }
   $('#events').innerHTML = upcoming.map((e) => `
     <li class="event">
       <div class="event-date">
@@ -559,10 +598,26 @@ function renderAgenda() {
       </div>
       <div style="min-width:0">
         <div class="event-title">${esc(e.title)}</div>
-        <div class="event-meta">${e.date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} · ${esc(e.place)}</div>
+        <div class="event-meta">${[e.allDay ? 'Todo el día' : fmtHour(e.date), e.place].filter(Boolean).map(esc).join(' · ')}</div>
       </div>
       <div class="event-right">${tagHTML(e.cat)}<span class="muted small">${fmtRel(e.date)}</span></div>
     </li>`).join('');
+}
+
+// Llega desde google.js con los eventos reales de tu Google Calendar
+function onCalendarEvents(list) {
+  events = list.map((e) => ({ ...e, cat: categorize(e.title) }));
+  calendarSyncedAt = new Date();
+
+  // Si tienes el viaje en el calendario, la cuenta atrás usa esa fecha
+  const milan = events.find((e) => /mil[aá]n/i.test(e.title) && e.date.getMonth() === 11);
+  if (milan) {
+    CONFIG.milanTrip.start = milan.date;
+    if (milan.end && milan.end - milan.date > 86400000) CONFIG.milanTrip.end = milan.end;
+  }
+  renderAgenda();
+  renderBriefing();
+  tickCountdown();
 }
 
 function tickCountdown() {
@@ -601,6 +656,7 @@ function renderTripChecklist() {
    un informe de Power BI o un workspace de Fabric), cambia la "url" de TOOLS
    por el enlace directo del archivo/informe. */
 function renderTools() {
+  $('#financeLink').href = CONFIG.financeUrl;
   $('#tools').innerHTML = TOOLS.map((t) => `
     <a class="tool" href="${t.url}" target="_blank" rel="noopener noreferrer" style="--c:var(--c-${t.cat})">
       <span class="tool-icon">${esc(t.icon)}</span>
@@ -616,7 +672,7 @@ function tickClock() {
 }
 
 function bindNav() {
-  const links = [...document.querySelectorAll('.nav-link')];
+  const links = [...document.querySelectorAll('.nav-link[href^="#"]')];
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((en) => {
       if (!en.isIntersecting) return;
@@ -663,18 +719,28 @@ function bindGlobal() {
     applyColors();
     renderColorSettings();
   });
+
+  // Google: conectar, o si ya estás conectado, sincronizar ahora
+  $('#googleBtn').addEventListener('click', () => {
+    GoogleSync.isConnected() ? GoogleSync.refresh(true) : GoogleSync.connect();
+  });
+  $('#disconnectGoogle').addEventListener('click', () => {
+    GoogleSync.disconnect();
+    events = MOCK_EVENTS;
+    calendarSyncedAt = null;
+    renderAgenda();
+    renderBriefing();
+  });
 }
 
-/* ---------------------------------------------------------
-   INICIO
-   --------------------------------------------------------- */
-function init() {
-  applyColors();
-  bindKanban();
-  bindHealth();
-  bindGlobal();
-  bindNav();
+function renderSyncStatus(state, text) {
+  $('#googleBtn').dataset.state = state;
+  $('#googleLabel').textContent = text;
+  $('#disconnectGoogle').hidden = state === 'off' || state === 'setup';
+}
 
+function renderAll() {
+  applyColors();
   renderBriefing();
   renderKanban();
   renderStrength();
@@ -682,11 +748,37 @@ function init() {
   renderProtein();
   renderAgenda();
   renderTripChecklist();
+}
+
+/* ---------------------------------------------------------
+   INICIO
+   --------------------------------------------------------- */
+function init() {
+  loadState();
+  bindKanban();
+  bindHealth();
+  bindGlobal();
+  bindNav();
+  renderAll();
   renderTools();
 
   tickClock();
   tickCountdown();
-  setInterval(() => { tickClock(); tickCountdown(); }, 1000);
+  setInterval(() => {
+    tickClock();
+    tickCountdown();
+    if (dateKey() !== TODAY) { loadState(); renderAll(); } // pasó la medianoche con la app abierta
+  }, 1000);
+
+  GoogleSync.init({
+    clientId: CONFIG.googleClientId,
+    onStatus: renderSyncStatus,
+    onEvents: onCalendarEvents,
+    onRemoteData: () => { loadState(); renderAll(); }, // cambios hechos en otro dispositivo
+  });
+
+  // App instalable (PWA): funciona sin conexión y se puede añadir a la pantalla de inicio
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -2,9 +2,20 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#080808">
   <title>Panel de vida</title>
+
+  <!-- App instalable (PWA) en móvil y ordenador -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Panel">
+
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -35,6 +46,10 @@
         <svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg>
         <span>Herramientas</span>
       </a>
+      <a href="https://deliio.github.io/finanzas/" class="nav-link nav-ext" id="financeLink" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24"><path d="M17 6.5A6.5 6.5 0 1 0 17 17.5M4 10h9M4 14h9"/></svg>
+        <span>Finanzas ↗</span>
+      </a>
     </nav>
 
     <div class="sidebar-foot">
@@ -54,7 +69,12 @@
         <h1 id="greeting">Buenos días</h1>
         <p class="muted" id="today"></p>
       </div>
-      <button class="btn" id="refreshBriefing" type="button">↻ Actualizar briefing</button>
+      <div class="header-actions">
+        <button class="btn sync-btn" id="googleBtn" type="button" data-state="off">
+          <span class="sync-dot"></span><span id="googleLabel">Conectar Google</span>
+        </button>
+        <button class="btn" id="refreshBriefing" type="button">↻ Actualizar briefing</button>
+      </div>
     </header>
 
     <div class="grid">
@@ -134,7 +154,7 @@
 
       <!-- 4 · AGENDA Y VIAJES -->
       <section class="card span-2" id="agenda">
-        <div class="card-head"><h2>Próximos eventos</h2><span class="muted small">Simulado · Google Calendar</span></div>
+        <div class="card-head"><h2>Próximos eventos</h2><span class="muted small" id="agendaSource">Ejemplo · conecta Google</span></div>
         <ul class="events" id="events"></ul>
       </section>
 
@@ -169,11 +189,15 @@
     <div class="color-list" id="colorList"></div>
     <div class="dialog-foot">
       <button class="btn btn-ghost" id="resetColors" type="button">Restablecer</button>
+      <button class="btn btn-ghost" id="disconnectGoogle" type="button" hidden>Desconectar Google</button>
       <button class="btn btn-primary" value="close">Listo</button>
     </div>
   </form>
 </dialog>
 
+<!-- Google Identity Services (inicio de sesión para Calendar y Drive) -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="google.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,15 +1,38 @@
 # Panel de vida
 
 Dashboard personal en una sola página (HTML, CSS y JavaScript nativo, sin frameworks) con modo oscuro estricto.
+Se instala como app en el móvil y en el ordenador, y se sincroniza entre los dos con tu cuenta de Google.
+
+**Web:** https://deliio.github.io/panel-de-vida/
 
 ## Módulos
-- **Resumen matutino**: saludo dinámico, tareas pendientes, entrenamiento del día, resumen de correos y recordatorio.
+- **Resumen matutino**: saludo dinámico, tareas pendientes, eventos de hoy, entrenamiento del día, resumen de correos y recordatorio.
 - **Hub universitario & proyectos**: Kanban (Pendiente / En proceso / Hecho) con arrastrar y soltar y etiquetas de color.
-- **Salud & deporte**: rutinas de fuerza (tren superior / piernas), métricas de running (objetivo < 6:10 /km) y tracker de proteína.
-- **Agenda & viajes**: próximos eventos y cuenta atrás para el viaje a Milán.
-- **Herramientas conectadas**: accesos a Moovi, Gmail, Excel, Fabric, Power BI y Google Calendar.
+- **Salud & deporte**: rutinas de fuerza (tren superior / piernas), running (objetivo < 6:10 /km) y tracker de proteína.
+- **Agenda & viajes**: tus próximos eventos de Google Calendar y cuenta atrás para el viaje a Milán.
+- **Herramientas conectadas**: accesos a Finanzas, Moovi, Gmail, Excel, Fabric, Power BI y Google Calendar.
 
-## Uso
-Abre `index.html` en el navegador. Los datos son simulados y lo que marcas se guarda en `localStorage`.
+## Instalar como app
+- **Android (Chrome):** abre la web → menú ⋮ → *Instalar aplicación*.
+- **iPhone (Safari):** abre la web → Compartir → *Añadir a pantalla de inicio*.
+- **Ordenador (Chrome/Edge):** icono de instalar en la barra de direcciones.
 
-Edita `CONFIG` al principio de `app.js` para personalizarlo, y busca `🔌 API` para conectar Gmail, Google Calendar o Strava.
+## Conectar Google (Calendar + sincronización)
+Pulsa **Conectar Google** en el panel. Se pide permiso para:
+- *Ver tus calendarios* (solo lectura).
+- *Guardar los datos del panel en una carpeta oculta de tu Drive* (`appDataFolder`), para que móvil y ordenador muestren lo mismo.
+
+No hay servidor: los datos van directamente de tu navegador a tu Google Drive.
+
+### Crear el Client ID (una sola vez)
+1. Entra en https://console.cloud.google.com y crea un proyecto (p. ej. "Panel de vida").
+2. *APIs y servicios → Biblioteca*: habilita **Google Calendar API** y **Google Drive API**.
+3. *Google Auth Platform* (pantalla de consentimiento): tipo **Externo**, nombre de la app y tu email.
+   En *Público → Usuarios de prueba*, añade tu Gmail.
+4. *Clientes → Crear cliente*: tipo **Aplicación web**. En *Orígenes de JavaScript autorizados* añade
+   `https://deliio.github.io` y `http://localhost:5173`.
+5. Copia el **ID de cliente** y pégalo en `CONFIG.googleClientId` (al principio de `app.js`).
+
+## Personalizar
+Edita `CONFIG` al principio de `app.js` (nombre, fechas del viaje, objetivos, plan semanal, enlace de Finanzas).
+Busca `🔌 API` para ver dónde se conectan los servicios externos.
