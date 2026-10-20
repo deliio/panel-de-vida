@@ -112,11 +112,10 @@ const tagHTML = (cat, text = catLabel(cat)) => `<span class="tag" style="--c:var
    DATOS SIMULADOS
    --------------------------------------------------------- */
 
-/* 🔌 API · GMAIL
-   Sustituye MOCK_EMAILS por una llamada a la Gmail API, p. ej.:
-     const res = await gapi.client.gmail.users.messages.list({ userId: 'me', q: 'is:unread newer_than:2d' });
-     // y para cada id: gapi.client.gmail.users.messages.get({ userId: 'me', id, format: 'metadata' })
-   Mapea cada mensaje a { id, from, subject, summary, time, cat, important }.
+/* 🔌 API · GMAIL (ya conectado en google.js)
+   Mientras no conectes Google se muestran estos correos de ejemplo.
+   Al conectar, GoogleSync.loadGmail() trae tus no leídos de la bandeja de entrada
+   (solo remitente, asunto y fragmento: nunca el cuerpo completo).
    Para un resumen generado por IA, envía los asuntos/snippets a TU backend
    (nunca pongas claves de API en este archivo) y pinta la respuesta en #briefingText. */
 const MOCK_EMAILS = [
@@ -125,6 +124,128 @@ const MOCK_EMAILS = [
   { id: 'e3', from: 'Equipo proyecto', subject: 'Feedback del dashboard de ventas', summary: 'Piden añadir un filtro por región en Power BI.', time: 'Ayer', cat: 'proyecto', important: false },
   { id: 'e4', from: 'Vueling', subject: 'Tu reserva a Milán está confirmada', summary: 'Check-in online disponible 7 días antes del vuelo.', time: 'Ayer', cat: 'viaje', important: false },
   { id: 'e5', from: 'Strava', subject: 'Tu resumen semanal', summary: '3 actividades, 18,4 km. Ritmo medio mejorado 4 s/km.', time: 'Lun', cat: 'salud', important: false },
+];
+
+let emails = MOCK_EMAILS;
+let emailsSyncedAt = null; // null = datos simulados
+
+/* ---------------------------------------------------------
+   HOJA DE RUTA · plan de carrera (del documento "FUTURO")
+   start/end marcan qué fase está activa ("Ahora").
+   --------------------------------------------------------- */
+const ROADMAP = [
+  {
+    id: 'p1', period: 'Sep 2026', start: '2026-09-01', end: '2026-10-31',
+    title: 'Inicio de 3º ADE',
+    goal: 'Entrar a 3º con ventaja y acostumbrar el ojo a la terminología en inglés (ETL, Star Schema, Measures).',
+    items: [
+      { id: 'p1a', text: 'Subir los primeros dashboards al portfolio (Kaggle / GitHub)' },
+      { id: 'p1b', text: 'Compartir los primeros hitos en LinkedIn' },
+      { id: 'p1c', text: 'Cambiar el sistema operativo y los programas a inglés' },
+    ],
+  },
+  {
+    id: 'p2', period: 'Curso 2026/27', start: '2026-09-01', end: '2027-06-30',
+    title: '3º de ADE',
+    goal: 'Perfil híbrido ADE + Python + Power BI + SQL, y desbloquear el límite de créditos para las prácticas.',
+    items: [
+      { id: 'p2a', text: 'Recuperar las 2 materias pendientes y superar los 120 ECTS' },
+      { id: 'p2b', text: 'Microcredencial de Python para Análisis de Datos (UVigo & Santander)' },
+      { id: 'p2c', text: 'Dominar Pandas y NumPy' },
+      { id: 'p2d', text: 'Aprender la sintaxis básica de SQL' },
+      { id: 'p2e', text: 'Simulación Forage · Accenture Data' },
+      { id: 'p2f', text: 'Simulación Forage · Deloitte Consulting' },
+    ],
+    links: [{ label: 'Forage', url: 'https://www.theforage.com' }],
+  },
+  {
+    id: 'p3', period: 'Ene 2027', start: '2027-01-01', end: '2027-02-28',
+    title: 'Base Microsoft (sin gastar dinero)',
+    goal: 'Aprovechar la baja carga lectiva para preparar PL-300 y DP-600 con material oficial y entornos gratuitos.',
+    items: [
+      { id: 'p3a', text: 'Ruta de Microsoft Learn para PL-300 (con laboratorios)' },
+      { id: 'p3b', text: 'Ruta de Microsoft Learn para DP-600' },
+      { id: 'p3c', text: 'Activar la prueba gratuita de Fabric (60 días) a principios de enero' },
+      { id: 'p3d', text: 'Crear un Lakehouse, ingerir datos y conectarlo a Power BI' },
+      { id: 'p3e', text: 'Modelado y primeros pasos con DAX (Datdata, en español)' },
+      { id: 'p3f', text: 'Arquitectura de Fabric con Guy in a Cube y DAX avanzado con SQLBI' },
+    ],
+    links: [
+      { label: 'Microsoft Learn', url: 'https://learn.microsoft.com/es-es/training/browse/?terms=PL-300' },
+      { label: 'Fabric', url: 'https://app.fabric.microsoft.com' },
+      { label: 'Guy in a Cube', url: 'https://www.youtube.com/@GuyInACube' },
+      { label: 'SQLBI', url: 'https://www.youtube.com/@SQLBI' },
+    ],
+  },
+  {
+    id: 'p4', period: 'Mar – Jun 2027', start: '2027-03-01', end: '2027-06-30',
+    title: 'Final de 3º',
+    goal: 'Asegurar la plaza de verano en Data & Analytics / Business Intelligence de Altia en Vigo.',
+    items: [
+      { id: 'p4a', text: 'Tramitar el convenio de prácticas extracurriculares (Telepráctica UVigo)' },
+      { id: 'p4b', text: 'Portfolio con 4–5 proyectos prácticos' },
+      { id: 'p4c', text: 'Presentar el portfolio de Power BI y Python a los responsables de Altia' },
+    ],
+  },
+  {
+    id: 'p5', period: 'Verano 2027', start: '2027-07-01', end: '2027-09-14',
+    title: 'Prácticas en Altia',
+    goal: 'Demostrar solvencia técnica y visión de negocio desde el primer día para seguir durante 4º.',
+    items: [
+      { id: 'p5a', text: 'Aplicar modelado Star Schema, flujos ETL y dashboards ejecutivos' },
+      { id: 'p5b', text: 'Familiarizarme con Microsoft Fabric' },
+      { id: 'p5c', text: 'Metodologías ágiles (Scrum / Jira)' },
+    ],
+  },
+  {
+    id: 'p6', period: 'Curso 2027/28', start: '2027-09-15', end: '2028-06-30',
+    title: '4º de ADE',
+    goal: 'Graduarme con más de un año de experiencia real en consultoría.',
+    items: [
+      { id: 'p6a', text: 'Enlazar con prácticas curriculares en Altia para convalidar créditos' },
+      { id: 'p6b', text: 'Solicitar la convalidación de créditos optativos' },
+      { id: 'p6c', text: 'TFG aplicado a Business Intelligence / analítica empresarial' },
+    ],
+  },
+  {
+    id: 'p7', period: 'Años 1–2', start: '2028-07-01', end: '2030-06-30',
+    title: 'Consolidación',
+    goal: 'Blindar el CV con la acreditación de Microsoft y un máster oficial mientras genero ingresos en Vigo.',
+    items: [
+      { id: 'p7a', text: 'Contrato fijo en Altia como Junior BI Consultant (20–26k)' },
+      { id: 'p7b', text: 'Máster oficial compatible con el trabajo (Beca MEC)' },
+      { id: 'p7c', text: 'Aprobar la certificación Microsoft PL-300 (Power BI Data Analyst)' },
+    ],
+  },
+  {
+    id: 'p8', period: 'Años 3–5', start: '2030-07-01', end: '2033-06-30',
+    title: 'El salto global',
+    goal: 'Multiplicar el salario (45–65k €+) en remoto o en multinacionales: inglés + PL-300 + experiencia.',
+    items: [
+      { id: 'p8a', text: 'CV y LinkedIn 100% en inglés' },
+      { id: 'p8b', text: 'Big Four (Deloitte, PwC) o full remote para Reino Unido, EE. UU. o norte de Europa' },
+    ],
+  },
+  {
+    id: 'p9', period: 'Año 6+', start: '2033-07-01', end: null,
+    title: 'La meta final',
+    goal: 'Superar los 80–100k € anuales con autonomía, liderazgo de equipos y flexibilidad geográfica.',
+    items: [
+      { id: 'p9a', text: 'Lead Data Consultant, BI Manager o responsable de datos en cliente internacional' },
+    ],
+  },
+];
+
+// Próximos pasos concretos que se añaden una vez al Kanban (ids fijos para no duplicar entre dispositivos)
+const ROADMAP_TASKS = [
+  { id: 'rm-portfolio', title: 'Subir primeros dashboards al portfolio (Kaggle / GitHub)', cat: 'proyecto', status: 'todo', due: null },
+  { id: 'rm-linkedin', title: 'Compartir primeros hitos en LinkedIn', cat: 'proyecto', status: 'todo', due: null },
+  { id: 'rm-ingles', title: 'Poner el sistema operativo y los programas en inglés', cat: 'personal', status: 'todo', due: null },
+  { id: 'rm-ects', title: 'Recuperar las 2 materias pendientes (120 ECTS)', cat: 'urgente', status: 'todo', due: null },
+  { id: 'rm-python', title: 'Microcredencial Python para Análisis de Datos (UVigo & Santander)', cat: 'uni', status: 'todo', due: null },
+  { id: 'rm-sql', title: 'Aprender sintaxis básica de SQL', cat: 'proyecto', status: 'todo', due: null },
+  { id: 'rm-forage', title: 'Simulaciones Forage: Accenture Data y Deloitte Consulting', cat: 'proyecto', status: 'todo', due: null },
+  { id: 'rm-fabric', title: 'Activar prueba gratuita de Fabric (60 días)', cat: 'proyecto', status: 'todo', due: '2027-01-07' },
 ];
 
 const DEFAULT_TASKS = [
@@ -198,7 +319,7 @@ function setTime(h, m) { const d = new Date(); d.setHours(h, m, 0, 0); return d;
 const CATEGORY_RULES = [
   ['viaje', /vuelo|viaje|mil[aá]n|hotel|aeropuerto|\btren\b/],
   ['urgente', /examen|parcial|urgente/],
-  ['uni', /\bclase|entrega|pr[aá]ctica|tutor[ií]a|\buni(versidad)?\b|moovi|seminario|\btfg\b/],
+  ['uni', /\bclase|entrega|pr[aá]ctica|tutor[ií]a|\buni(versidad)?\b|moovi|uvigo|seminario|\btfg\b/],
   ['salud', /gym|gimnasio|entreno|carrera|running|correr|fuerza|m[eé]dico|fisio/],
   ['proyecto', /reuni[oó]n|proyecto|power ?bi|fabric|\bcall\b|\bmeet/],
   ['finanzas', /pago|factura|banco|recibo|alquiler|n[oó]mina/],
@@ -223,7 +344,7 @@ const TOOLS = [
 /* ---------------------------------------------------------
    ESTADO (persistido en localStorage)
    --------------------------------------------------------- */
-let TODAY, WEEK, tasks, readEmails, runs, strengthDone, protein, tripChecks;
+let TODAY, WEEK, tasks, readEmails, runs, strengthDone, protein, tripChecks, roadmapDone;
 
 // Se vuelve a llamar al llegar datos de otro dispositivo o al cambiar de día
 function loadState() {
@@ -235,6 +356,19 @@ function loadState() {
   strengthDone = store.get(`strength:${WEEK}`, { upper: [], legs: [] });
   protein = store.get(`protein:${TODAY}`, { meals: [], extra: 0 });
   tripChecks = store.get('tripChecks', []);
+  roadmapDone = store.get('roadmap', []);
+}
+
+// Añade los próximos pasos de la hoja de ruta al Kanban una sola vez.
+// Se llama tras sincronizar con Drive para no pisar los datos de otro dispositivo.
+function seedRoadmapTasks() {
+  if (store.get('roadmapSeeded', false)) return;
+  const have = new Set(tasks.map((t) => t.id));
+  tasks = [...tasks, ...ROADMAP_TASKS.filter((t) => !have.has(t.id))];
+  store.set('tasks', tasks);
+  store.set('roadmapSeeded', true);
+  renderKanban();
+  renderBriefing();
 }
 
 /* ---------------------------------------------------------
@@ -296,7 +430,7 @@ function renderBriefing() {
   const doing = tasks.filter((t) => t.status === 'doing').length;
   const dueSoon = pending.filter((t) => t.due && daysUntil(parseKey(t.due)) <= 2).length;
   const training = CONFIG.trainingPlan[now.getDay()];
-  const unread = MOCK_EMAILS.filter((e) => !readEmails.includes(e.id));
+  const unread = emails.filter((e) => !readEmails.includes(e.id));
   const milanDays = Math.max(0, Math.floor((CONFIG.milanTrip.start - now) / 86400000));
 
   const trainingText = training.type === 'rest'
@@ -313,6 +447,7 @@ function renderBriefing() {
     <p>${agendaText}</p>
     <p>${trainingText}</p>
     <p>${summarizeEmails(unread)}</p>
+    ${roadmapText() ? `<p>${roadmapText()}</p>` : ''}
     <p class="reminder">⏰ Recordatorio: ${pickReminder(pending)}</p>`;
 
   const stats = [
@@ -328,7 +463,12 @@ function renderBriefing() {
 }
 
 function renderEmails() {
-  $('#emailList').innerHTML = MOCK_EMAILS.map((e) => {
+  $('#mailSource').textContent = emailsSyncedAt ? `Gmail · ${fmtHour(emailsSyncedAt)}` : 'Ejemplo';
+  if (!emails.length) {
+    $('#emailList').innerHTML = '<li class="empty">No tienes correos sin leer.</li>';
+    return;
+  }
+  $('#emailList').innerHTML = emails.map((e) => {
     const read = readEmails.includes(e.id);
     return `
       <li class="mail ${read ? 'is-read' : ''}" data-id="${e.id}" title="${read ? 'Marcar como no leído' : 'Marcar como leído'}">
@@ -338,9 +478,96 @@ function renderEmails() {
           <div class="mail-subj">${esc(e.subject)}</div>
           <div class="mail-sum">${esc(e.summary)}</div>
         </div>
-        <span class="mail-time">${esc(e.time)}</span>
+        <span class="mail-time">${esc(e.time)}${e.url ? `<a class="mail-open" href="${e.url}" target="_blank" rel="noopener" title="Abrir en Gmail">↗</a>` : ''}</span>
       </li>`;
   }).join('');
+}
+
+// Llega desde google.js con tus correos no leídos reales
+function onGmailMessages(list) {
+  const now = new Date();
+  emails = list.map((m) => {
+    const sameDay = daysUntil(m.date) === 0;
+    return {
+      ...m,
+      cat: categorize(`${m.subject} ${m.from}`),
+      time: sameDay ? fmtHour(m.date)
+        : daysUntil(m.date) === -1 ? 'Ayer'
+        : capitalize(m.date.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '')),
+      url: `https://mail.google.com/mail/u/0/#inbox/${m.threadId}`,
+    };
+  });
+  emailsSyncedAt = now;
+  // Olvida los "vistos" de correos que ya no están sin leer
+  const ids = new Set(emails.map((e) => e.id));
+  const kept = readEmails.filter((id) => ids.has(id));
+  if (kept.length !== readEmails.length) { readEmails = kept; store.set('readEmails', readEmails); }
+  renderBriefing();
+}
+
+/* ---------------------------------------------------------
+   HOJA DE RUTA
+   --------------------------------------------------------- */
+function phaseState(p) {
+  const today = startOfDay(new Date());
+  if (today < parseKey(p.start)) return 'next';
+  if (p.end && today > parseKey(p.end)) return 'past';
+  return 'now';
+}
+
+// Fase activa con pasos pendientes (para el briefing)
+function roadmapText() {
+  const phase = ROADMAP.find((p) => phaseState(p) === 'now' && p.items.some((i) => !roadmapDone.includes(i.id)));
+  if (!phase) return '';
+  const done = phase.items.filter((i) => roadmapDone.includes(i.id)).length;
+  const next = phase.items.find((i) => !roadmapDone.includes(i.id));
+  return `Hoja de ruta: <strong>${esc(phase.title)}</strong> (${done}/${phase.items.length}). Siguiente paso: ${esc(next.text)}.`;
+}
+
+function renderRoadmap() {
+  const all = ROADMAP.flatMap((p) => p.items);
+  $('#roadmapProgress').textContent = `${all.filter((i) => roadmapDone.includes(i.id)).length}/${all.length} pasos`;
+
+  $('#roadmap').innerHTML = ROADMAP.map((p) => {
+    const state = phaseState(p);
+    const done = p.items.filter((i) => roadmapDone.includes(i.id)).length;
+    const pct = Math.round((done / p.items.length) * 100);
+    return `
+      <article class="phase is-${state}" data-phase="${p.id}">
+        <div class="phase-head">
+          <span class="phase-period">${esc(p.period)}</span>
+          ${state === 'now' ? tagHTML('proyecto', 'Ahora') : state === 'past' ? '<span class="muted small">Pasado</span>' : ''}
+        </div>
+        <h3>${esc(p.title)}</h3>
+        <p class="phase-goal">${esc(p.goal)}</p>
+        <div class="bar" style="--c:var(--c-proyecto)"><span style="--p:${pct}%"></span></div>
+        <ul class="checklist">
+          ${p.items.map((i) => `
+            <li><label class="check" style="--c:var(--c-proyecto)">
+              <input type="checkbox" data-id="${i.id}" ${roadmapDone.includes(i.id) ? 'checked' : ''}>
+              <span>${esc(i.text)}</span>
+            </label></li>`).join('')}
+        </ul>
+        ${p.links ? `<div class="phase-links">${p.links.map((l) => `<a href="${l.url}" target="_blank" rel="noopener">${esc(l.label)} ↗</a>`).join('')}</div>` : ''}
+      </article>`;
+  }).join('');
+}
+
+function bindRoadmap() {
+  $('#roadmap').addEventListener('change', (e) => {
+    const id = e.target.dataset.id;
+    if (!id) return;
+    roadmapDone = e.target.checked ? [...roadmapDone, id] : roadmapDone.filter((x) => x !== id);
+    store.set('roadmap', roadmapDone);
+    renderRoadmap();
+    renderBriefing();
+  });
+}
+
+// Centra la línea temporal en la fase actual
+function scrollRoadmapToNow() {
+  const el = $('#roadmap .phase.is-now');
+  if (el) $('#roadmap').scrollLeft = el.offsetLeft - $('#roadmap').offsetLeft;
 }
 
 /* ---------------------------------------------------------
@@ -684,6 +911,7 @@ function bindNav() {
 
 function bindGlobal() {
   $('#emailList').addEventListener('click', (e) => {
+    if (e.target.closest('a')) return; // el enlace ↗ abre Gmail sin marcar como visto
     const id = e.target.closest('.mail')?.dataset.id;
     if (!id) return;
     readEmails = readEmails.includes(id) ? readEmails.filter((x) => x !== id) : [...readEmails, id];
@@ -691,7 +919,7 @@ function bindGlobal() {
     renderBriefing();
   });
   $('#markAllRead').addEventListener('click', () => {
-    readEmails = MOCK_EMAILS.map((e) => e.id);
+    readEmails = emails.map((e) => e.id);
     store.set('readEmails', readEmails);
     renderBriefing();
   });
@@ -748,6 +976,7 @@ function renderAll() {
   renderProtein();
   renderAgenda();
   renderTripChecklist();
+  renderRoadmap();
 }
 
 /* ---------------------------------------------------------
@@ -756,11 +985,13 @@ function renderAll() {
 function init() {
   loadState();
   bindKanban();
+  bindRoadmap();
   bindHealth();
   bindGlobal();
   bindNav();
   renderAll();
   renderTools();
+  scrollRoadmapToNow();
 
   tickClock();
   tickCountdown();
@@ -774,6 +1005,8 @@ function init() {
     clientId: CONFIG.googleClientId,
     onStatus: renderSyncStatus,
     onEvents: onCalendarEvents,
+    onEmails: onGmailMessages,
+    onSynced: seedRoadmapTasks, // tras traer los datos de Drive
     onRemoteData: () => { loadState(); renderAll(); }, // cambios hechos en otro dispositivo
   });
 

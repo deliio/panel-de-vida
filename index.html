@@ -34,6 +34,10 @@
         <svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
         <span>Uni & Proyectos</span>
       </a>
+      <a href="#futuro" class="nav-link">
+        <svg viewBox="0 0 24 24"><path d="M4 19l5-6 4 3 7-9"/><path d="M15 7h5v5"/></svg>
+        <span>Hoja de ruta</span>
+      </a>
       <a href="#salud" class="nav-link">
         <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
         <span>Salud & Deporte</span>
@@ -89,8 +93,8 @@
 
         <div class="briefing-mail">
           <div class="card-head">
-            <h2>Correos no leídos</h2>
-            <button class="link-btn" id="markAllRead" type="button">Marcar todo leído</button>
+            <h2>Correos no leídos <span class="muted small" id="mailSource">Ejemplo</span></h2>
+            <button class="link-btn" id="markAllRead" type="button">Marcar todo visto</button>
           </div>
           <ul class="mail-list" id="emailList"></ul>
         </div>
@@ -111,6 +115,15 @@
         </form>
 
         <div class="board" id="board"></div>
+      </section>
+
+      <!-- HOJA DE RUTA (plan de carrera) -->
+      <section class="card span-3" id="futuro">
+        <div class="card-head">
+          <h2>Hoja de ruta · Futuro</h2>
+          <span class="muted small" id="roadmapProgress"></span>
+        </div>
+        <div class="roadmap" id="roadmap"></div>
       </section>
 
       <!-- 3 · TRACKER DE SALUD Y DEPORTE -->

@@ -389,3 +389,31 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.7); }
   .header-actions { width: 100%; }
   .header-actions .btn { flex: 1; }
 }
+
+/* ---------- Hoja de ruta ---------- */
+.roadmap {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 300px); gap: 12px;
+  overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 8px;
+  scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent;
+}
+.phase {
+  scroll-snap-align: start; display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.phase.is-now { border-color: color-mix(in srgb, var(--c-proyecto) 45%, var(--border)); }
+.phase.is-past { opacity: .6; }
+.phase-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.phase-period { font: 600 12px var(--mono); color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.phase h3 { font-size: 15px; font-weight: 600; }
+.phase-goal { font-size: 12.5px; color: var(--muted); }
+.phase .check { align-items: flex-start; }
+.phase .check input { margin-top: 2px; }
+.phase-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.phase-links a { font-size: 12px; color: var(--text-2); padding: 3px 8px; border: 1px solid var(--border-strong); border-radius: 999px; }
+.phase-links a:hover { color: var(--text); border-color: var(--text-2); }
+
+.mail-open { margin-left: 4px; color: var(--muted); }
+.mail-open:hover { color: var(--text); }
+.card-head h2 .small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+.mail-list .empty { list-style: none; }

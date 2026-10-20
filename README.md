@@ -6,7 +6,8 @@ Se instala como app en el móvil y en el ordenador, y se sincroniza entre los do
 **Web:** https://deliio.github.io/panel-de-vida/
 
 ## Módulos
-- **Resumen matutino**: saludo dinámico, tareas pendientes, eventos de hoy, entrenamiento del día, resumen de correos y recordatorio.
+- **Resumen matutino**: saludo dinámico, tareas pendientes, eventos de hoy, entrenamiento del día, resumen de tus correos de Gmail, paso actual de la hoja de ruta y recordatorio.
+- **Hoja de ruta · Futuro**: plan de carrera por fases (3º ADE → PL-300 → Altia → salto global) con pasos marcables.
 - **Hub universitario & proyectos**: Kanban (Pendiente / En proceso / Hecho) con arrastrar y soltar y etiquetas de color.
 - **Salud & deporte**: rutinas de fuerza (tren superior / piernas), running (objetivo < 6:10 /km) y tracker de proteína.
 - **Agenda & viajes**: tus próximos eventos de Google Calendar y cuenta atrás para el viaje a Milán.
@@ -21,12 +22,13 @@ Se instala como app en el móvil y en el ordenador, y se sincroniza entre los do
 Pulsa **Conectar Google** en el panel. Se pide permiso para:
 - *Ver tus calendarios* (solo lectura).
 - *Guardar los datos del panel en una carpeta oculta de tu Drive* (`appDataFolder`), para que móvil y ordenador muestren lo mismo.
+- *Ver los metadatos de tus correos* (remitente, asunto y fragmento de los no leídos; nunca el cuerpo).
 
 No hay servidor: los datos van directamente de tu navegador a tu Google Drive.
 
 ### Crear el Client ID (una sola vez)
 1. Entra en https://console.cloud.google.com y crea un proyecto (p. ej. "Panel de vida").
-2. *APIs y servicios → Biblioteca*: habilita **Google Calendar API** y **Google Drive API**.
+2. *APIs y servicios → Biblioteca*: habilita **Google Calendar API**, **Google Drive API** y **Gmail API**.
 3. *Google Auth Platform* (pantalla de consentimiento): tipo **Externo**, nombre de la app y tu email.
    En *Público → Usuarios de prueba*, añade tu Gmail.
 4. *Clientes → Crear cliente*: tipo **Aplicación web**. En *Orígenes de JavaScript autorizados* añade

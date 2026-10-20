@@ -6,14 +6,18 @@
    2) Sincronizar los datos del panel entre móvil y ordenador,
       guardándolos en una carpeta oculta y privada de TU Google Drive
       (appDataFolder: solo esta app puede verla y no ocupa sitio visible).
+   3) Ver tus correos no leídos de Gmail (solo remitente, asunto y fragmento;
+      el permiso "metadata" no da acceso al cuerpo de los mensajes).
    No hay servidor: el token vive solo en este navegador y caduca en 1 h.
    ========================================================= */
 
 window.GoogleSync = (() => {
-  const SCOPES = [
+  const SCOPE_LIST = [
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/drive.appdata',
-  ].join(' ');
+    'https://www.googleapis.com/auth/gmail.metadata',
+  ];
+  const SCOPES = SCOPE_LIST.join(' ');
   const FILE_NAME = 'panel-de-vida.json';
   const DATA_PREFIX = 'lifedash:';      // lo que se sincroniza
   const META_PREFIX = 'lifedash-meta:'; // token y marcas de tiempo (solo este dispositivo)
@@ -38,6 +42,11 @@ window.GoogleSync = (() => {
   const token = () => {
     const t = meta.get('token');
     return t && t.expiresAt > Date.now() + 60000 ? t.value : null;
+  };
+  // ¿El permiso concedido incluye todo lo que pide esta versión? (p. ej. Gmail añadido después)
+  const missingScopes = () => {
+    const granted = (meta.get('token')?.scope || '').split(' ');
+    return SCOPE_LIST.some((s) => !granted.includes(s));
   };
   const idleStatus = () => (meta.get('connected')
     ? status('expired', 'Reconectar Google')
@@ -163,14 +172,46 @@ window.GoogleSync = (() => {
     opts.onEvents?.(events);
   }
 
+  /* ---------- Gmail (no leídos de la bandeja de entrada) ---------- */
+  const decodeEntities = (s) => new DOMParser().parseFromString(s, 'text/html').documentElement.textContent;
+
+  async function loadGmail() {
+    const list = await api('https://gmail.googleapis.com/gmail/v1/users/me/messages?labelIds=INBOX&labelIds=UNREAD&maxResults=10');
+    const ids = (list.messages || []).map((m) => m.id);
+    const fields = 'id,threadId,snippet,internalDate,labelIds,payload/headers';
+    const messages = await Promise.all(ids.map((id) =>
+      api(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&fields=${fields}`)
+        .catch(() => null)));
+
+    const emails = messages.filter(Boolean).map((m) => {
+      const header = (name) => m.payload?.headers?.find((h) => h.name.toLowerCase() === name)?.value || '';
+      const from = header('from');
+      return {
+        id: m.id,
+        threadId: m.threadId,
+        from: (from.match(/^\s*"?([^"<]+?)"?\s*</)?.[1] || from.replace(/[<>]/g, '')).trim() || '(desconocido)',
+        subject: header('subject') || '(Sin asunto)',
+        summary: decodeEntities(m.snippet || ''),
+        date: new Date(Number(m.internalDate)),
+        important: (m.labelIds || []).includes('IMPORTANT'),
+      };
+    });
+    opts.onEmails?.(emails);
+  }
+
   /* ---------- Conexión ---------- */
   async function refresh(force = false) {
     if (!token()) { idleStatus(); return; }
+    if (missingScopes()) { status('expired', 'Activar Gmail'); return; }
     if (!force && Date.now() - lastRefresh < 60000) return;
     lastRefresh = Date.now();
     status('sync', 'Sincronizando…');
     try {
-      await Promise.all([pull(), loadCalendar()]);
+      await Promise.all([
+        pull().then(() => opts.onSynced?.()),
+        loadCalendar(),
+        loadGmail().catch((e) => { if (e.message === 'no-token') throw e; console.warn('[GoogleSync] Gmail', e); }),
+      ]);
       status('ok', `Sincronizado ${hhmm()}`);
     } catch (e) { handleError(e); }
   }
@@ -187,13 +228,16 @@ window.GoogleSync = (() => {
       scope: SCOPES,
       callback: (r) => {
         if (r.error) { handleError(new Error(r.error)); return; }
-        meta.set('token', { value: r.access_token, expiresAt: Date.now() + Number(r.expires_in) * 1000 });
+        meta.set('token', { value: r.access_token, scope: r.scope, expiresAt: Date.now() + Number(r.expires_in) * 1000 });
         meta.set('connected', true);
+        if (missingScopes()) { status('expired', 'Falta marcar algún permiso'); return; }
         refresh(true);
       },
       error_callback: idleStatus, // ventana cerrada o bloqueada
     });
-    tokenClient.requestAccessToken({ prompt: meta.get('connected') ? '' : 'consent' });
+    // Pide consentimiento la primera vez o si esta versión necesita permisos nuevos
+    const needsConsent = !meta.get('connected') || (meta.get('token') && missingScopes());
+    tokenClient.requestAccessToken({ prompt: needsConsent ? 'consent' : '' });
   }
 
   function disconnect() {
@@ -214,5 +258,5 @@ window.GoogleSync = (() => {
     });
   }
 
-  return { init, connect, disconnect, refresh, markDirty, isConnected: () => !!token() };
+  return { init, connect, disconnect, refresh, markDirty, isConnected: () => !!token() && !missingScopes() };
 })();
