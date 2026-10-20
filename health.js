@@ -21,7 +21,7 @@ const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes
 const MEAL_NAMES = ['Desayuno', 'Comida', 'Merienda', 'Cena', 'Snack'];
 
 const DEFAULT_ROUTINE = {
-  days: { 0: 'bike', 1: 'upper', 2: 'run', 3: 'legs', 4: 'bike', 5: 'upper', 6: 'run' },
+  days: { 0: 'rest', 1: 'upper', 2: 'run', 3: 'legs', 4: 'rest', 5: 'upper', 6: 'run' },
   workouts: {
     upper: {
       label: 'Tren superior', kind: 'gym',
