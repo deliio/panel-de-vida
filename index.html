@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Panel de vida</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ BARRA LATERAL ============ -->
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">◐</span><span>Panel de vida</span></div>
+
+    <nav class="nav">
+      <a href="#resumen" class="nav-link active">
+        <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+        <span>Resumen</span>
+      </a>
+      <a href="#kanban" class="nav-link">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>
+        <span>Uni & Proyectos</span>
+      </a>
+      <a href="#salud" class="nav-link">
+        <svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+        <span>Salud & Deporte</span>
+      </a>
+      <a href="#agenda" class="nav-link">
+        <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+        <span>Agenda & Viajes</span>
+      </a>
+      <a href="#herramientas" class="nav-link">
+        <svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg>
+        <span>Herramientas</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="clock" id="clock">--:--</div>
+      <button class="btn btn-ghost" id="openSettings" type="button">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="16" cy="10" r="1.2"/></svg>
+        Colores
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============ CONTENIDO ============ -->
+  <main class="main">
+
+    <header class="page-header" id="resumen">
+      <div>
+        <h1 id="greeting">Buenos días</h1>
+        <p class="muted" id="today"></p>
+      </div>
+      <button class="btn" id="refreshBriefing" type="button">↻ Actualizar briefing</button>
+    </header>
+
+    <div class="grid">
+
+      <!-- 1 · RESUMEN MATUTINO -->
+      <section class="card span-3 briefing">
+        <div class="briefing-main">
+          <div class="card-head"><h2>✦ Briefing del día</h2></div>
+          <div class="briefing-text" id="briefingText"></div>
+          <div class="stats" id="briefingStats"></div>
+        </div>
+
+        <div class="briefing-mail">
+          <div class="card-head">
+            <h2>Correos no leídos</h2>
+            <button class="link-btn" id="markAllRead" type="button">Marcar todo leído</button>
+          </div>
+          <ul class="mail-list" id="emailList"></ul>
+        </div>
+      </section>
+
+      <!-- 2 · HUB UNIVERSITARIO & PROYECTOS (KANBAN) -->
+      <section class="card span-3" id="kanban">
+        <div class="card-head">
+          <h2>Hub universitario & proyectos</h2>
+          <span class="muted small">Arrastra las tarjetas entre columnas</span>
+        </div>
+
+        <form class="task-form" id="taskForm" autocomplete="off">
+          <input type="text" id="taskTitle" placeholder="Nueva tarea…" required maxlength="120">
+          <select id="taskCat"></select>
+          <input type="date" id="taskDue">
+          <button class="btn btn-primary" type="submit">Añadir</button>
+        </form>
+
+        <div class="board" id="board"></div>
+      </section>
+
+      <!-- 3 · TRACKER DE SALUD Y DEPORTE -->
+      <section class="card span-3" id="salud">
+        <div class="card-head"><h2>Salud & deporte</h2><span class="muted small" id="weekLabel"></span></div>
+
+        <div class="health-grid">
+          <!-- Fuerza -->
+          <div class="panel">
+            <h3>Rutina de fuerza</h3>
+            <div id="strength"></div>
+          </div>
+
+          <!-- Running -->
+          <div class="panel">
+            <h3>Running <span class="tag" style="--c:var(--c-salud)">Objetivo &lt; 6:10 /km</span></h3>
+            <div class="run-kpis" id="runKpis"></div>
+            <div class="pace-chart" id="paceChart"></div>
+            <form class="run-form" id="runForm" autocomplete="off">
+              <input type="number" id="runKm" step="0.01" min="0.5" placeholder="km" required>
+              <input type="text" id="runTime" placeholder="mm:ss" pattern="^\d{1,3}:\d{2}(:\d{2})?$" required>
+              <button class="btn" type="submit">Registrar</button>
+            </form>
+          </div>
+
+          <!-- Nutrición -->
+          <div class="panel">
+            <h3>Nutrición alta en proteínas</h3>
+            <div class="protein">
+              <div class="ring" id="proteinRing"><span id="proteinValue">0g</span></div>
+              <div class="protein-actions">
+                <button class="btn btn-sm" data-add="10" type="button">+10 g</button>
+                <button class="btn btn-sm" data-add="25" type="button">+25 g</button>
+                <button class="btn btn-sm btn-ghost" data-add="reset" type="button">Reiniciar</button>
+              </div>
+            </div>
+            <ul class="checklist" id="meals"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 · AGENDA Y VIAJES -->
+      <section class="card span-2" id="agenda">
+        <div class="card-head"><h2>Próximos eventos</h2><span class="muted small">Simulado · Google Calendar</span></div>
+        <ul class="events" id="events"></ul>
+      </section>
+
+      <section class="card countdown" id="milan">
+        <div class="card-head"><h2>✈ Milán · Diciembre</h2></div>
+        <div class="cd-grid" id="countdown">
+          <div><strong data-u="d">--</strong><span>días</span></div>
+          <div><strong data-u="h">--</strong><span>horas</span></div>
+          <div><strong data-u="m">--</strong><span>min</span></div>
+          <div><strong data-u="s">--</strong><span>seg</span></div>
+        </div>
+        <div class="bar" style="--c:var(--c-viaje)"><span id="tripProgress"></span></div>
+        <p class="muted small" id="tripMeta"></p>
+        <ul class="checklist" id="tripChecklist"></ul>
+      </section>
+
+      <!-- 5 · HERRAMIENTAS CONECTADAS -->
+      <section class="card span-3" id="herramientas">
+        <div class="card-head"><h2>Herramientas conectadas</h2></div>
+        <div class="tools" id="tools"></div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============ AJUSTES DE COLOR (color coding personalizable) ============ -->
+<dialog class="dialog" id="settings">
+  <form method="dialog">
+    <div class="card-head"><h2>Códigos de color</h2><button class="icon-btn" value="close" aria-label="Cerrar">×</button></div>
+    <p class="muted small">Cambia el color de cada categoría. Se guarda en este navegador.</p>
+    <div class="color-list" id="colorList"></div>
+    <div class="dialog-foot">
+      <button class="btn btn-ghost" id="resetColors" type="button">Restablecer</button>
+      <button class="btn btn-primary" value="close">Listo</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
