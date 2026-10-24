@@ -9,9 +9,9 @@ Se instala como app en el móvil y en el ordenador, y se sincroniza entre los do
 - **Resumen matutino**: saludo dinámico, tareas pendientes, eventos de hoy, entrenamiento del día, resumen de tus correos de Gmail, paso actual de la hoja de ruta y recordatorio.
 - **Hoja de ruta · Futuro**: plan de carrera por fases (3º ADE → PL-300 → Altia → salto global) con pasos marcables.
 - **Hub universitario & proyectos**: Kanban (Pendiente / En proceso / Hecho) con arrastrar y soltar y etiquetas de color.
-- **Salud & deporte**: rutina de gimnasio semanal editable, running con Strava (ritmo objetivo 5:45–6:00 /km) y registro diario de dolor de rodillas con plan progresivo de vuelta a correr.
-- **Calendario de entrenos**: mes a mes, qué tocaba y qué hiciste (gimnasio, running, bici).
-- **Nutrición & calorías**: diario de comidas (alimentos comunes + búsqueda en Open Food Facts) y objetivo de calorías con déficit según tus datos.
+- **Salud & deporte**: tus propias rutinas (las creas tú), tus carreras con km y tiempo o ritmo, y registro diario de dolor de rodillas.
+- **Calendario de entrenos**: apuntas lo que vas a hacer y lo que hiciste cada día; nada viene predefinido.
+- **Nutrición & calorías**: escribes lo que has comido como lo dirías ("café con leche sin azúcar") y se estiman las calorías con una tabla de comida casera; guarda tus comidas habituales.
 - **Agenda & viajes**: tus próximos eventos de Google Calendar y cuenta atrás para el viaje a Milán.
 - **Herramientas conectadas**: accesos a Finanzas, Moovi, Gmail, Excel, Fabric, Power BI y Google Calendar.
 
@@ -57,6 +57,5 @@ Strava obliga a guardar una clave secreta que no puede ir en una web pública, a
 La clave del panel se guarda en tu Drive privado (sincronizada entre dispositivos), nunca en este repositorio.
 
 ## Personalizar
-Edita `CONFIG` al principio de `app.js` (nombre, fechas del viaje, enlace de Finanzas) y `HEALTH` al principio de
-`health.js` (plan de vuelta a correr, ritmo objetivo). La rutina semanal y tus datos de calorías se editan desde el propio panel.
+Edita `CONFIG` al principio de `app.js` (nombre, fechas del viaje, enlace de Finanzas) . Tus rutinas, entrenos, comidas y datos de calorías se gestionan desde el propio panel; la tabla de alimentos caseros está en `FOODS` (`health.js`).
 Busca `🔌 API` para ver dónde se conectan los servicios externos.

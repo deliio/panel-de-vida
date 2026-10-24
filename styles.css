@@ -583,3 +583,72 @@ code { font: 12px var(--mono); background: var(--hover); padding: 1px 5px; borde
 .day-checks .check input:checked + span { color: var(--text); text-decoration: none; }
 #dayPlan .link-btn { text-decoration: underline; }
 #dayForm .dialog-foot { margin-top: 14px; }
+
+/* ---------- v2: rutinas propias, calendario libre, comida casera ---------- */
+.routine-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+.routine-head .tag { font-size: 10px; }
+.routine-items { list-style: none; margin-top: 6px; }
+.routine-items li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 13px; color: var(--text-2); border-bottom: 1px solid var(--border); }
+.routine-items em { font: normal 12px var(--mono); color: var(--muted); }
+.run-form { grid-template-columns: minmax(0, .7fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+.pace-chart .col i { background: color-mix(in srgb, var(--c-viaje) 70%, transparent); }
+
+/* Calendario */
+.cal-plan.is-planned { opacity: .55; font-style: italic; }
+.cal-more { font-size: 10px; color: var(--muted); }
+.cal-dots i.is-planned, .cal-legend i.is-planned { background: transparent; border: 1.5px solid var(--c); }
+.cal-legend i.is-planned { width: 8px; height: 8px; }
+
+/* Ficha del día */
+.day-entries { list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; }
+.day-entry { padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface-2); }
+.day-entry.is-planned { border-style: dashed; }
+.de-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.de-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex-shrink: 0; }
+.day-entry.is-planned .de-dot { background: transparent; border: 1.5px solid var(--c); }
+.de-title { font-weight: 600; font-size: 14px; }
+.de-done { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); cursor: pointer; }
+.de-done input { accent-color: var(--c); }
+.de-ex { margin-top: 6px; }
+.de-note { margin-top: 6px; font-size: 13px; color: var(--text-2); white-space: pre-wrap; }
+.entry-form { display: flex; flex-direction: column; gap: 8px; }
+.entry-form .btn { align-self: flex-end; }
+.dialog-foot .spacer { flex: 1; }
+
+/* Comida casera */
+#foodForm { display: flex; flex-direction: column; gap: 8px; }
+#foodForm select { align-self: flex-start; }
+#foodForm .btn { align-self: flex-end; }
+#foodText {
+  width: 100%; resize: vertical; font: 14px/1.5 var(--font);
+  background: var(--bg); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 8px 10px;
+}
+#foodText:focus { outline: none; border-color: var(--text-2); }
+.food-estimate { margin-top: 10px; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg); }
+.est-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.est-table td { padding: 4px 4px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.est-table td em { font-size: 11px; color: var(--muted); font-style: normal; }
+.est-qty { white-space: nowrap; color: var(--muted); }
+.est-qty input { width: 64px; padding: 4px 6px; }
+.est-kcal { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.est-total td { color: var(--text); font-weight: 600; border-bottom: 0; }
+.est-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.est-actions input[type="text"] { flex: 1 1 160px; }
+.warn-text { color: var(--c-personal); }
+.sub-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--text-2); margin: 16px 0 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); overflow: hidden; }
+.chip button { background: none; border: 0; color: var(--text-2); font-size: 12.5px; padding: 4px 4px 4px 10px; cursor: pointer; }
+.chip button:hover { color: var(--text); }
+.chip em { font-style: normal; color: var(--muted); font-size: 11px; margin-left: 4px; }
+.chip .chip-x { padding: 4px 9px 4px 4px; color: var(--muted); }
+.food-manual .food-row + .food-row { margin-top: 6px; align-items: center; justify-content: space-between; }
+.food-manual .check { flex: 0 1 auto; }
+
+@media (max-width: 820px) {
+  .run-form { grid-template-columns: 1fr 1fr; }
+}
+#runForm { grid-template-columns: 1fr 1fr; }
+[hidden] { display: none !important; }
+.dialog-wide { overflow-x: hidden; }
+.entry-form .food-row > * { min-width: 0; }

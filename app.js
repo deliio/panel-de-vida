@@ -390,7 +390,7 @@ function renderBriefing() {
 
   const stats = [
     { v: pending.length, l: 'Tareas pendientes', c: 'uni' },
-    { v: { gym: '🏋️', run: '🏃', bike: '🚴', rest: '—' }[training.kind], l: `Hoy: ${esc(training.label)}`, c: 'salud' },
+    { v: { gym: '🏋️', run: '🏃', bike: '🚴', other: '✦', rest: '—' }[training.kind], l: training.kind === 'rest' ? 'Sin entreno apuntado' : `Hoy: ${esc(training.label)}`, c: 'salud' },
     { v: unread.length, l: 'Correos sin leer', c: 'urgente' },
     { v: milanDays, l: 'Días para Milán', c: 'viaje' },
   ];

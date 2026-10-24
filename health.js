@@ -1,120 +1,248 @@
 'use strict';
 /* =========================================================
    PANEL DE VIDA · health.js
-   Rutina semanal editable, calendario de entrenos, rodillas,
-   running (con Strava) y diario de comidas con calorías.
+   Tus rutinas, tu calendario de entrenos (lo que tú apuntas),
+   dolor de rodillas y comidas caseras con calorías estimadas.
+   Nada viene predefinido: todo lo creas tú.
    Tus datos personales (peso, altura, dolor, comidas…) NO están
    en este archivo: se guardan en tu navegador y en tu Drive privado.
    Usa las utilidades de app.js ($, esc, store, dateKey, addDays…).
    ========================================================= */
 
 const HEALTH = {
-  // Plan de vuelta a correr: km de cada paso, salidas sin dolor para subir de paso y dolor máximo (0–10)
-  knee: { start: '2026-10-22', steps: [1, 2, 3, 3.5], runsPerStep: 2, painLimit: 3 },
-  pace: { min: 5 * 60 + 45, max: 6 * 60 }, // ritmo objetivo 5:45–6:00 /km
-  stravaDays: 120,                          // días de historial que se piden a Strava
+  stravaDays: 120, // días de historial que se piden a Strava (solo si conectas el puente)
 };
 
-const KINDS = { gym: 'Gimnasio', run: 'Running', bike: 'Bici', other: 'Otro', rest: 'Descanso' };
-const KIND_COLOR = { gym: 'salud', run: 'viaje', bike: 'proyecto', other: 'uni', rest: 'personal' };
-const DONE_KINDS = ['gym', 'run', 'bike', 'other']; // lo que puedes marcar como hecho en un día
+const TYPES = {
+  gym: { label: 'Gimnasio', color: 'salud', emoji: '🏋️' },
+  run: { label: 'Running', color: 'viaje', emoji: '🏃' },
+  bike: { label: 'Bici', color: 'proyecto', emoji: '🚴' },
+  other: { label: 'Otro', color: 'uni', emoji: '✦' },
+};
 const WEEKDAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const MEAL_NAMES = ['Desayuno', 'Comida', 'Merienda', 'Cena', 'Snack'];
 
-const DEFAULT_ROUTINE = {
-  days: { 0: 'rest', 1: 'upper', 2: 'run', 3: 'legs', 4: 'rest', 5: 'upper', 6: 'run' },
-  workouts: {
-    upper: {
-      label: 'Tren superior', kind: 'gym',
-      items: [
-        { name: 'Press banca', sets: '4×8' },
-        { name: 'Dominadas', sets: '4×6' },
-        { name: 'Press militar', sets: '3×10' },
-        { name: 'Remo con barra', sets: '4×8' },
-        { name: 'Fondos', sets: '3×12' },
-      ],
-    },
-    legs: {
-      label: 'Piernas', kind: 'gym',
-      items: [
-        { name: 'Sentadilla', sets: '4×6' },
-        { name: 'Peso muerto rumano', sets: '3×8' },
-        { name: 'Prensa', sets: '3×12' },
-        { name: 'Zancadas', sets: '3×10' },
-        { name: 'Gemelos', sets: '4×15' },
-      ],
-    },
-    run: { label: 'Running', kind: 'run', items: [] },
-    bike: { label: 'Bici', kind: 'bike', items: [] },
-    rest: { label: 'Descanso activo', kind: 'rest', items: [] },
-  },
+/* ---------------------------------------------------------
+   ALIMENTOS CASEROS · valores aproximados por 100 g (kcal, proteína, hidratos, grasa)
+   a = cómo lo escribes · g = ración normal en gramos · each = peso de una unidad (huevo, tostada…)
+   units = medidas propias de ese alimento (caña de cerveza, lata de atún…)
+   --------------------------------------------------------- */
+const FOODS = [
+  // Desayuno y bebidas
+  { n: 'Café con leche (semidesnatada)', a: ['cafe con leche', 'cafe con leche semi', 'cafe con leche semidesnatada', 'cafe con leche y'], kcal: 33, p: 2.4, c: 3.5, f: 1.1, g: 200 },
+  { n: 'Café con leche entera', a: ['cafe con leche entera'], kcal: 45, p: 2.4, c: 3.4, f: 2.5, g: 200 },
+  { n: 'Café con leche desnatada', a: ['cafe con leche desnatada'], kcal: 25, p: 2.5, c: 3.6, f: 0.1, g: 200 },
+  { n: 'Café con bebida de avena', a: ['cafe con leche de avena', 'cafe con avena', 'cafe con bebida de avena'], kcal: 30, p: 0.6, c: 4.5, f: 1, g: 200 },
+  { n: 'Café solo', a: ['cafe solo', 'cafe', 'espresso', 'expreso', 'cafe americano', 'americano'], kcal: 2, p: 0.1, c: 0, f: 0, g: 60 },
+  { n: 'Cortado', a: ['cortado'], kcal: 25, p: 1.6, c: 2.2, f: 0.9, g: 80 },
+  { n: 'Leche semidesnatada', a: ['leche', 'leche semidesnatada', 'leche semi'], kcal: 46, p: 3.3, c: 4.8, f: 1.6, g: 250 },
+  { n: 'Leche entera', a: ['leche entera'], kcal: 65, p: 3.2, c: 4.7, f: 3.6, g: 250 },
+  { n: 'Leche desnatada', a: ['leche desnatada'], kcal: 35, p: 3.4, c: 4.9, f: 0.1, g: 250 },
+  { n: 'Bebida de avena', a: ['leche de avena', 'bebida de avena'], kcal: 45, p: 0.5, c: 7, f: 1.5, g: 250 },
+  { n: 'Bebida de soja', a: ['leche de soja', 'bebida de soja'], kcal: 38, p: 3.2, c: 2, f: 1.8, g: 250 },
+  { n: 'Azúcar', a: ['azucar'], kcal: 400, p: 0, c: 100, f: 0, g: 8, units: { sobre: 8, cucharadita: 5 } },
+  { n: 'Cacao soluble', a: ['cola cao', 'colacao', 'cacao soluble', 'nesquik', 'cacao'], kcal: 380, p: 5, c: 80, f: 3, g: 15 },
+  { n: 'Té o infusión', a: ['te', 'infusion', 'manzanilla', 'te verde', 'poleo'], kcal: 1, p: 0, c: 0.2, f: 0, g: 250 },
+  { n: 'Zumo de naranja natural', a: ['zumo de naranja', 'zumo natural', 'zumo'], kcal: 45, p: 0.7, c: 10, f: 0.2, g: 200 },
+  { n: 'Tostada de pan', a: ['tostada', 'tostadas', 'pan tostado'], kcal: 265, p: 9, c: 49, f: 3.2, g: 70, each: 35 },
+  { n: 'Tostada integral', a: ['tostada integral', 'tostadas integrales', 'pan integral'], kcal: 247, p: 13, c: 41, f: 3.4, g: 70, each: 35 },
+  { n: 'Pan', a: ['pan', 'pan blanco', 'barra de pan', 'baguette', 'trozo de pan'], kcal: 265, p: 9, c: 49, f: 3.2, g: 60 },
+  { n: 'Pan de molde', a: ['pan de molde', 'pan bimbo'], kcal: 265, p: 8, c: 48, f: 4, g: 50, each: 25 },
+  { n: 'Aceite de oliva', a: ['aceite', 'aceite de oliva', 'aove', 'chorro de aceite'], kcal: 884, p: 0, c: 0, f: 100, g: 10, units: { cucharada: 10, cucharadita: 4, chorrito: 5 } },
+  { n: 'Tomate rallado', a: ['tomate rallado', 'tomate triturado', 'tomate natural'], kcal: 20, p: 0.9, c: 3.9, f: 0.2, g: 40 },
+  { n: 'Mantequilla', a: ['mantequilla'], kcal: 717, p: 0.9, c: 0.1, f: 81, g: 10 },
+  { n: 'Mermelada', a: ['mermelada', 'confitura'], kcal: 250, p: 0.4, c: 62, f: 0, g: 15 },
+  { n: 'Miel', a: ['miel'], kcal: 304, p: 0.3, c: 82, f: 0, g: 15 },
+  { n: 'Crema de cacahuete', a: ['crema de cacahuete', 'mantequilla de cacahuete'], kcal: 588, p: 25, c: 20, f: 50, g: 15 },
+  { n: 'Copos de avena', a: ['avena', 'copos de avena', 'porridge', 'gachas de avena'], kcal: 389, p: 16.9, c: 66, f: 6.9, g: 40 },
+  { n: 'Cereales', a: ['cereales', 'corn flakes', 'muesli', 'granola'], kcal: 380, p: 7, c: 80, f: 3, g: 40 },
+  { n: 'Galletas', a: ['galleta', 'galletas', 'galletas maria'], kcal: 440, p: 7, c: 73, f: 13, g: 32, each: 8 },
+  { n: 'Croissant', a: ['croissant', 'cruasan'], kcal: 406, p: 8, c: 46, f: 21, g: 60, each: 60 },
+  { n: 'Magdalena', a: ['magdalena', 'magdalenas'], kcal: 430, p: 6, c: 50, f: 23, g: 30, each: 30 },
+  { n: 'Bizcocho', a: ['bizcocho', 'trozo de bizcocho'], kcal: 380, p: 6, c: 55, f: 15, g: 60 },
+  { n: 'Tortitas de arroz', a: ['tortitas de arroz', 'tortita de arroz'], kcal: 387, p: 8, c: 82, f: 3, g: 16, each: 8 },
+
+  // Lácteos y huevos
+  { n: 'Yogur natural', a: ['yogur', 'yogur natural', 'yogures'], kcal: 61, p: 3.5, c: 4.7, f: 3.3, g: 125, each: 125 },
+  { n: 'Yogur griego', a: ['yogur griego', 'griego'], kcal: 97, p: 9, c: 3.9, f: 5, g: 125, each: 125 },
+  { n: 'Yogur proteico / griego 0%', a: ['yogur proteico', 'yogur griego 0', 'yogur 0', 'yogur desnatado', 'skyr'], kcal: 60, p: 10, c: 3.8, f: 0.3, g: 125, each: 125 },
+  { n: 'Kéfir', a: ['kefir'], kcal: 60, p: 3.4, c: 4.5, f: 3.2, g: 200 },
+  { n: 'Queso fresco batido 0%', a: ['queso fresco batido', 'queso batido'], kcal: 46, p: 8, c: 3.6, f: 0.2, g: 125 },
+  { n: 'Requesón', a: ['requeson'], kcal: 98, p: 11, c: 3.4, f: 4.3, g: 100 },
+  { n: 'Queso fresco', a: ['queso fresco', 'queso de burgos'], kcal: 180, p: 12, c: 3, f: 13, g: 50 },
+  { n: 'Queso curado', a: ['queso', 'queso curado', 'queso semicurado', 'queso manchego'], kcal: 390, p: 26, c: 0.5, f: 32, g: 30 },
+  { n: 'Queso de tetilla', a: ['queso tetilla', 'queso de tetilla', 'tetilla', 'queso san simon'], kcal: 330, p: 22, c: 0.5, f: 27, g: 30 },
+  { n: 'Mozzarella', a: ['mozzarella'], kcal: 250, p: 18, c: 3, f: 18, g: 60 },
+  { n: 'Huevo', a: ['huevo', 'huevos'], kcal: 143, p: 12.6, c: 0.7, f: 9.5, g: 110, each: 55 },
+  { n: 'Huevo cocido', a: ['huevo cocido', 'huevos cocidos', 'huevo duro', 'huevos duros'], kcal: 155, p: 13, c: 1.1, f: 11, g: 110, each: 55 },
+  { n: 'Huevo frito', a: ['huevo frito', 'huevos fritos'], kcal: 196, p: 13.6, c: 0.8, f: 15, g: 120, each: 60 },
+  { n: 'Huevos revueltos', a: ['huevos revueltos', 'huevo revuelto', 'revuelto'], kcal: 170, p: 11, c: 1.5, f: 13, g: 120, each: 60 },
+  { n: 'Tortilla francesa', a: ['tortilla francesa'], kcal: 175, p: 12, c: 0.6, f: 14, g: 120 },
+  { n: 'Claras de huevo', a: ['claras', 'claras de huevo', 'clara', 'clara de huevo'], kcal: 52, p: 10.9, c: 0.7, f: 0.2, g: 100, each: 33 },
+
+  // Carne
+  { n: 'Pechuga de pollo', a: ['pechuga de pollo', 'pechuga', 'pollo', 'filete de pollo', 'pollo a la plancha', 'pechugas de pollo', 'pechuga de pollo a la plancha', 'pechuga a la plancha', 'filete de pollo a la plancha'], kcal: 165, p: 31, c: 0, f: 3.6, g: 150 },
+  { n: 'Pollo asado', a: ['pollo asado', 'pollo al horno'], kcal: 215, p: 26, c: 0, f: 12, g: 200 },
+  { n: 'Muslo de pollo', a: ['muslo de pollo', 'muslos de pollo', 'contramuslo', 'contramuslos'], kcal: 210, p: 26, c: 0, f: 11, g: 120, each: 120 },
+  { n: 'Pechuga de pavo', a: ['pavo', 'pechuga de pavo', 'filete de pavo'], kcal: 135, p: 29, c: 0, f: 1.7, g: 150 },
+  { n: 'Fiambre de pavo', a: ['fiambre de pavo', 'pavo en lonchas', 'lonchas de pavo'], kcal: 100, p: 18, c: 2.5, f: 2, g: 40, each: 20 },
+  { n: 'Filete de ternera', a: ['ternera', 'filete de ternera', 'filete', 'bistec', 'entrecot', 'solomillo'], kcal: 170, p: 26, c: 0, f: 7, g: 150 },
+  { n: 'Carne picada', a: ['carne picada'], kcal: 260, p: 24, c: 0, f: 18, g: 120 },
+  { n: 'Lomo de cerdo', a: ['lomo', 'lomo de cerdo', 'cinta de lomo', 'cerdo', 'secreto', 'presa'], kcal: 160, p: 27, c: 0, f: 6, g: 150 },
+  { n: 'Costillas de cerdo', a: ['costillas', 'costilla', 'costillas de cerdo', 'churrasco'], kcal: 290, p: 24, c: 0, f: 21, g: 250 },
+  { n: 'Chorizo', a: ['chorizo'], kcal: 455, p: 24, c: 2, f: 38, g: 30 },
+  { n: 'Jamón serrano', a: ['jamon', 'jamon serrano', 'jamon iberico'], kcal: 241, p: 31, c: 0, f: 13, g: 30 },
+  { n: 'Jamón cocido', a: ['jamon york', 'jamon cocido'], kcal: 110, p: 18, c: 1.5, f: 3.5, g: 30, each: 15 },
+  { n: 'Salchichas', a: ['salchicha', 'salchichas', 'frankfurt'], kcal: 290, p: 12, c: 2, f: 26, g: 90, each: 45 },
+  { n: 'Bacon', a: ['bacon', 'beicon'], kcal: 450, p: 14, c: 1, f: 43, g: 20 },
+  { n: 'Albóndigas en salsa', a: ['albondigas'], kcal: 200, p: 13, c: 7, f: 13, g: 200, each: 30 },
+
+  // Pescado y marisco
+  { n: 'Pescado blanco (merluza…)', a: ['merluza', 'pescado', 'pescado blanco', 'pescadilla', 'gallo', 'lenguado', 'rape', 'dorada', 'lubina'], kcal: 90, p: 17.5, c: 0, f: 2, g: 150 },
+  { n: 'Salmón', a: ['salmon'], kcal: 208, p: 20, c: 0, f: 13, g: 150 },
+  { n: 'Atún al natural (lata)', a: ['atun', 'atun al natural', 'lata de atun'], kcal: 116, p: 26, c: 0, f: 1, g: 56, units: { lata: 56 } },
+  { n: 'Atún en aceite (lata)', a: ['atun en aceite'], kcal: 200, p: 25, c: 0, f: 11, g: 56, units: { lata: 56 } },
+  { n: 'Bacalao', a: ['bacalao'], kcal: 105, p: 23, c: 0, f: 1, g: 150 },
+  { n: 'Sardinas', a: ['sardinas', 'sardina', 'sardinas en lata'], kcal: 210, p: 24, c: 0, f: 12, g: 80 },
+  { n: 'Caballa', a: ['caballa', 'xarda'], kcal: 205, p: 19, c: 0, f: 14, g: 100 },
+  { n: 'Gambas o langostinos', a: ['gambas', 'gamba', 'langostinos', 'langostino'], kcal: 99, p: 21, c: 0, f: 1.5, g: 100 },
+  { n: 'Mejillones', a: ['mejillones'], kcal: 86, p: 12, c: 3.7, f: 2.2, g: 100 },
+  { n: 'Pulpo a la gallega', a: ['pulpo', 'pulpo a la gallega', 'pulpo a feira'], kcal: 140, p: 15, c: 2, f: 8, g: 200 },
+  { n: 'Calamares a la romana', a: ['calamares', 'calamares a la romana', 'rabas'], kcal: 225, p: 12, c: 16, f: 12, g: 150 },
+
+  // Platos de cuchara
+  { n: 'Lentejas guisadas', a: ['lentejas', 'lentejas guisadas', 'plato de lentejas'], kcal: 105, p: 7, c: 14, f: 2.5, g: 300 },
+  { n: 'Garbanzos cocidos', a: ['garbanzos'], kcal: 164, p: 8.9, c: 27, f: 2.6, g: 150 },
+  { n: 'Alubias guisadas', a: ['alubias', 'judias blancas', 'habichuelas'], kcal: 110, p: 7, c: 15, f: 2.5, g: 300 },
+  { n: 'Fabada', a: ['fabada'], kcal: 160, p: 9, c: 12, f: 9, g: 350 },
+  { n: 'Cocido', a: ['cocido', 'cocido gallego', 'cocido madrileno'], kcal: 150, p: 10, c: 10, f: 8, g: 400 },
+  { n: 'Caldo gallego', a: ['caldo gallego', 'caldo'], kcal: 50, p: 2.5, c: 6, f: 2, g: 350 },
+  { n: 'Sopa', a: ['sopa', 'sopa de fideos', 'sopa de pollo'], kcal: 45, p: 2.5, c: 6, f: 1, g: 300 },
+  { n: 'Crema de verduras', a: ['crema de verduras', 'pure de verduras', 'crema de calabacin', 'crema de calabaza'], kcal: 50, p: 1.5, c: 6, f: 2.5, g: 300 },
+  { n: 'Gazpacho', a: ['gazpacho'], kcal: 50, p: 0.9, c: 4, f: 3.5, g: 250 },
+  { n: 'Salmorejo', a: ['salmorejo'], kcal: 120, p: 2.5, c: 10, f: 8, g: 200 },
+
+  // Arroz, pasta, patata
+  { n: 'Arroz blanco cocido', a: ['arroz', 'arroz blanco', 'arroz cocido', 'arroz hervido'], kcal: 130, p: 2.7, c: 28, f: 0.3, g: 150 },
+  { n: 'Arroz integral cocido', a: ['arroz integral'], kcal: 123, p: 2.7, c: 25.6, f: 1, g: 150 },
+  { n: 'Pasta cocida', a: ['pasta', 'macarrones', 'espaguetis', 'spaghetti', 'tallarines', 'fideos', 'penne', 'espirales', 'tortellini'], kcal: 158, p: 5.8, c: 31, f: 0.9, g: 200 },
+  { n: 'Pasta con tomate', a: ['macarrones con tomate', 'pasta con tomate', 'espaguetis con tomate', 'pasta boloñesa', 'pasta bolonesa', 'espaguetis a la bolonesa', 'macarrones con carne'], kcal: 150, p: 6, c: 24, f: 3.5, g: 300 },
+  { n: 'Pasta carbonara', a: ['carbonara', 'pasta carbonara', 'espaguetis carbonara'], kcal: 200, p: 8, c: 22, f: 9, g: 300 },
+  { n: 'Paella', a: ['paella', 'arroz con marisco', 'paella de marisco', 'paella mixta'], kcal: 160, p: 8, c: 20, f: 5, g: 300 },
+  { n: 'Arroz con pollo', a: ['arroz con pollo'], kcal: 150, p: 9, c: 18, f: 4.5, g: 300 },
+  { n: 'Arroz a la cubana', a: ['arroz a la cubana'], kcal: 170, p: 6, c: 20, f: 7, g: 350 },
+  { n: 'Patata cocida', a: ['patata', 'patatas', 'patata cocida', 'patatas cocidas', 'cachelos'], kcal: 87, p: 1.9, c: 20, f: 0.1, g: 200 },
+  { n: 'Patatas fritas caseras', a: ['patatas fritas', 'patatas fritas caseras'], kcal: 250, p: 3.5, c: 32, f: 12, g: 150 },
+  { n: 'Patata asada', a: ['patata asada', 'patatas asadas', 'patatas al horno', 'patata al horno'], kcal: 95, p: 2.2, c: 21, f: 0.2, g: 200 },
+  { n: 'Puré de patata', a: ['pure de patata', 'pure', 'pure de patatas'], kcal: 105, p: 2, c: 15, f: 4, g: 200 },
+  { n: 'Boniato', a: ['boniato', 'batata'], kcal: 86, p: 1.6, c: 20, f: 0.1, g: 200 },
+  { n: 'Quinoa cocida', a: ['quinoa'], kcal: 120, p: 4.4, c: 21, f: 1.9, g: 150 },
+  { n: 'Cuscús cocido', a: ['cuscus'], kcal: 112, p: 3.8, c: 23, f: 0.2, g: 150 },
+  { n: 'Tortilla de trigo (wrap)', a: ['wrap', 'tortilla de trigo', 'fajita', 'tortillas de trigo'], kcal: 310, p: 8, c: 52, f: 7, g: 60, each: 60 },
+
+  // Verduras y fruta
+  { n: 'Ensalada', a: ['ensalada', 'lechuga', 'ensalada verde', 'canonigos', 'rucula'], kcal: 18, p: 1, c: 3.5, f: 0.2, g: 150 },
+  { n: 'Ensalada mixta', a: ['ensalada mixta'], kcal: 70, p: 5, c: 3, f: 4.5, g: 300 },
+  { n: 'Tomate', a: ['tomate', 'tomates'], kcal: 18, p: 0.9, c: 3.9, f: 0.2, g: 120, each: 120 },
+  { n: 'Brócoli', a: ['brocoli'], kcal: 34, p: 2.8, c: 7, f: 0.4, g: 150 },
+  { n: 'Judías verdes', a: ['judias verdes', 'judias'], kcal: 31, p: 1.8, c: 7, f: 0.1, g: 200 },
+  { n: 'Pimientos de Padrón', a: ['pimientos de padron', 'padron'], kcal: 90, p: 1.5, c: 4, f: 7, g: 100 },
+  { n: 'Pimiento', a: ['pimiento', 'pimientos'], kcal: 26, p: 1, c: 6, f: 0.3, g: 120 },
+  { n: 'Calabacín', a: ['calabacin'], kcal: 17, p: 1.2, c: 3.1, f: 0.3, g: 200 },
+  { n: 'Zanahoria', a: ['zanahoria', 'zanahorias'], kcal: 41, p: 0.9, c: 10, f: 0.2, g: 80, each: 80 },
+  { n: 'Espinacas', a: ['espinacas', 'acelgas'], kcal: 23, p: 2.9, c: 3.6, f: 0.4, g: 150 },
+  { n: 'Champiñones', a: ['champinones', 'setas'], kcal: 22, p: 3.1, c: 3.3, f: 0.3, g: 100 },
+  { n: 'Cebolla', a: ['cebolla'], kcal: 40, p: 1.1, c: 9, f: 0.1, g: 60 },
+  { n: 'Verduras a la plancha', a: ['verduras', 'verdura', 'parrillada de verduras', 'verduras salteadas', 'verduras a la plancha', 'menestra'], kcal: 45, p: 2, c: 6, f: 1.5, g: 200 },
+  { n: 'Pisto', a: ['pisto'], kcal: 70, p: 1.5, c: 7, f: 4, g: 200 },
+  { n: 'Aguacate', a: ['aguacate'], kcal: 160, p: 2, c: 9, f: 15, g: 70, units: { medio: 70 } },
+  { n: 'Aceitunas', a: ['aceitunas'], kcal: 145, p: 1, c: 4, f: 15, g: 30 },
+  { n: 'Fruta', a: ['fruta', 'pieza de fruta'], kcal: 55, p: 0.7, c: 13, f: 0.2, g: 150, each: 150 },
+  { n: 'Plátano', a: ['platano', 'platanos', 'banana'], kcal: 89, p: 1.1, c: 23, f: 0.3, g: 120, each: 120 },
+  { n: 'Manzana', a: ['manzana', 'manzanas'], kcal: 52, p: 0.3, c: 14, f: 0.2, g: 180, each: 180 },
+  { n: 'Naranja', a: ['naranja', 'naranjas'], kcal: 47, p: 0.9, c: 12, f: 0.1, g: 150, each: 150 },
+  { n: 'Mandarina', a: ['mandarina', 'mandarinas'], kcal: 53, p: 0.8, c: 13, f: 0.3, g: 80, each: 80 },
+  { n: 'Pera', a: ['pera', 'peras'], kcal: 57, p: 0.4, c: 15, f: 0.1, g: 170, each: 170 },
+  { n: 'Kiwi', a: ['kiwi', 'kiwis'], kcal: 61, p: 1.1, c: 15, f: 0.5, g: 75, each: 75 },
+  { n: 'Fresas', a: ['fresas', 'fresa', 'frutos rojos', 'arandanos', 'frambuesas'], kcal: 40, p: 0.7, c: 9, f: 0.3, g: 150 },
+  { n: 'Uvas', a: ['uvas'], kcal: 69, p: 0.7, c: 18, f: 0.2, g: 120 },
+  { n: 'Melón o sandía', a: ['melon', 'sandia'], kcal: 32, p: 0.7, c: 8, f: 0.2, g: 300 },
+  { n: 'Piña', a: ['pina'], kcal: 50, p: 0.5, c: 13, f: 0.1, g: 150 },
+  { n: 'Melocotón', a: ['melocoton', 'nectarina'], kcal: 39, p: 0.9, c: 10, f: 0.3, g: 150, each: 150 },
+  { n: 'Dátiles', a: ['datil', 'datiles'], kcal: 282, p: 2.5, c: 75, f: 0.4, g: 24, each: 8 },
+
+  // Frutos secos, picoteo y dulces
+  { n: 'Almendras', a: ['almendras'], kcal: 579, p: 21, c: 22, f: 50, g: 25 },
+  { n: 'Nueces', a: ['nueces'], kcal: 654, p: 15, c: 14, f: 65, g: 25 },
+  { n: 'Cacahuetes', a: ['cacahuetes', 'manises'], kcal: 567, p: 26, c: 16, f: 49, g: 25 },
+  { n: 'Frutos secos', a: ['frutos secos', 'anacardos', 'pistachos', 'avellanas'], kcal: 600, p: 18, c: 18, f: 52, g: 25 },
+  { n: 'Chocolate negro', a: ['chocolate negro', 'chocolate'], kcal: 600, p: 7.8, c: 46, f: 43, g: 20, units: { onza: 10 } },
+  { n: 'Chocolate con leche', a: ['chocolate con leche'], kcal: 535, p: 7.7, c: 59, f: 30, g: 20, units: { onza: 10 } },
+  { n: 'Patatas de bolsa', a: ['patatas de bolsa', 'chips', 'bolsa de patatas'], kcal: 536, p: 7, c: 53, f: 35, g: 40 },
+  { n: 'Barrita de proteína', a: ['barrita', 'barrita de proteina', 'barrita proteica'], kcal: 350, p: 30, c: 35, f: 10, g: 60, each: 60 },
+  { n: 'Proteína en polvo (batido)', a: ['batido de proteina', 'batido de proteinas', 'proteina', 'whey', 'scoop de proteina', 'batido'], kcal: 400, p: 80, c: 8, f: 6, g: 30, units: { scoop: 30, cacito: 30 } },
+  { n: 'Helado', a: ['helado'], kcal: 207, p: 3.5, c: 24, f: 11, g: 100 },
+  { n: 'Tarta o pastel', a: ['tarta', 'pastel', 'trozo de tarta', 'tarta de santiago'], kcal: 380, p: 6, c: 45, f: 19, g: 100 },
+  { n: 'Donut', a: ['donut', 'donuts', 'berlina'], kcal: 452, p: 5, c: 51, f: 25, g: 60, each: 60 },
+
+  // Platos y comida de fuera
+  { n: 'Tortilla de patatas', a: ['tortilla', 'tortilla de patatas', 'tortilla espanola', 'pincho de tortilla'], kcal: 180, p: 6.5, c: 15, f: 11, g: 150 },
+  { n: 'Empanada gallega', a: ['empanada', 'empanada gallega', 'empanada de atun', 'empanada de bonito', 'empanada de zamburinas', 'empanada de carne'], kcal: 290, p: 9, c: 30, f: 15, g: 150 },
+  { n: 'Croquetas', a: ['croqueta', 'croquetas'], kcal: 230, p: 7, c: 20, f: 13, g: 120, each: 30 },
+  { n: 'Lasaña', a: ['lasana'], kcal: 165, p: 9, c: 14, f: 8, g: 300 },
+  { n: 'Filete empanado', a: ['filete empanado', 'escalope', 'pollo empanado', 'san jacobo', 'nuggets', 'pechuga empanada'], kcal: 260, p: 16, c: 15, f: 15, g: 150 },
+  { n: 'Pollo al curry', a: ['pollo al curry', 'curry'], kcal: 140, p: 13, c: 5, f: 7, g: 250 },
+  { n: 'Pizza', a: ['pizza', 'porcion de pizza'], kcal: 266, p: 11, c: 33, f: 10, g: 250, units: { porcion: 100, trozo: 100 } },
+  { n: 'Hamburguesa completa', a: ['hamburguesa', 'burger', 'hamburguesa completa'], kcal: 260, p: 13, c: 25, f: 12, g: 230, each: 230 },
+  { n: 'Hamburguesa (solo carne)', a: ['hamburguesa casera', 'hamburguesa de ternera', 'hamburguesa sin pan', 'carne de hamburguesa'], kcal: 250, p: 20, c: 1, f: 18, g: 120, each: 120 },
+  { n: 'Bocadillo de jamón', a: ['bocadillo de jamon', 'bocata de jamon'], kcal: 260, p: 14, c: 34, f: 7, g: 180, each: 180 },
+  { n: 'Bocadillo', a: ['bocadillo', 'bocata'], kcal: 250, p: 11, c: 33, f: 8, g: 180, each: 180 },
+  { n: 'Sándwich mixto', a: ['sandwich mixto', 'mixto', 'sandwich'], kcal: 270, p: 14, c: 26, f: 12, g: 130, each: 130 },
+  { n: 'Burrito o fajitas', a: ['burrito', 'fajitas', 'tacos'], kcal: 210, p: 11, c: 22, f: 8, g: 250 },
+  { n: 'Kebab', a: ['kebab', 'durum'], kcal: 230, p: 13, c: 20, f: 11, g: 350 },
+  { n: 'Sushi', a: ['sushi', 'maki', 'nigiri', 'piezas de sushi'], kcal: 150, p: 6, c: 28, f: 1.5, g: 200, each: 25 },
+
+  // Bebidas
+  { n: 'Agua', a: ['agua'], kcal: 0, p: 0, c: 0, f: 0, g: 250 },
+  { n: 'Cerveza', a: ['cerveza', 'cana', 'canas', 'tercio'], kcal: 43, p: 0.5, c: 3.6, f: 0, g: 330, units: { cana: 200, tercio: 330, lata: 330, jarra: 500, botellin: 200 } },
+  { n: 'Cerveza sin alcohol', a: ['cerveza sin', 'cerveza sin alcohol', 'cerveza 0'], kcal: 20, p: 0.3, c: 4.5, f: 0, g: 330 },
+  { n: 'Vino', a: ['vino', 'copa de vino', 'vino tinto', 'vino blanco', 'albarino', 'ribeiro'], kcal: 83, p: 0.1, c: 2.6, f: 0, g: 150, units: { copa: 150 } },
+  { n: 'Refresco', a: ['refresco', 'coca cola', 'cocacola', 'fanta', 'aquarius', 'nestea'], kcal: 42, p: 0, c: 10.6, f: 0, g: 330 },
+  { n: 'Refresco zero', a: ['coca cola zero', 'cocacola zero', 'refresco zero', 'zero', 'light'], kcal: 0.3, p: 0, c: 0, f: 0, g: 330 },
+];
+
+// Medidas caseras genéricas (gramos o ml)
+const UNIT_G = {
+  vaso: 250, taza: 200, tazon: 300, bol: 300, cuenco: 300, cucharada: 15, cucharadita: 5,
+  rebanada: 30, punado: 25, loncha: 20, onza: 10, sobre: 8, chorrito: 5, copa: 150, jarra: 500,
 };
-
-// Ejemplo mientras no conectes Strava ni registres carreras
-const DEFAULT_RUNS = [
-  { date: dateKey(addDays(-9)), km: 6.2, sec: 39 * 60 + 40 },
-  { date: dateKey(addDays(-6)), km: 5.0, sec: 31 * 60 + 5 },
-  { date: dateKey(addDays(-3)), km: 5.5, sec: 33 * 60 + 50 },
-];
-
-/* Alimentos comunes · valores aproximados por 100 g (kcal, proteína, hidratos, grasa).
-   u = ración típica en gramos. Para productos envasados usa la búsqueda de Open Food Facts. */
-const FOOD_DB = [
-  { n: 'Pechuga de pollo (cocinada)', kcal: 165, p: 31, c: 0, f: 3.6 },
-  { n: 'Pechuga de pollo (cruda)', kcal: 120, p: 22.5, c: 0, f: 2.6 },
-  { n: 'Pechuga de pavo (fiambre)', kcal: 100, p: 18, c: 2.5, f: 2 },
-  { n: 'Ternera magra', kcal: 143, p: 21, c: 0, f: 6 },
-  { n: 'Carne picada mixta', kcal: 250, p: 17, c: 0, f: 20 },
-  { n: 'Jamón serrano', kcal: 241, p: 31, c: 0, f: 13 },
-  { n: 'Salmón', kcal: 208, p: 20, c: 0, f: 13 },
-  { n: 'Merluza', kcal: 86, p: 17, c: 0, f: 2 },
-  { n: 'Atún al natural (lata)', kcal: 116, p: 26, c: 0, f: 1, u: { label: '1 lata', g: 56 } },
-  { n: 'Huevo entero', kcal: 143, p: 12.6, c: 0.7, f: 9.5, u: { label: '1 huevo', g: 60 } },
-  { n: 'Claras de huevo', kcal: 52, p: 10.9, c: 0.7, f: 0.2 },
-  { n: 'Yogur griego natural', kcal: 97, p: 9, c: 3.9, f: 5, u: { label: '1 yogur', g: 125 } },
-  { n: 'Yogur griego 0%', kcal: 59, p: 10, c: 3.6, f: 0.4, u: { label: '1 yogur', g: 125 } },
-  { n: 'Queso fresco batido 0%', kcal: 46, p: 8, c: 3.6, f: 0.2 },
-  { n: 'Queso curado', kcal: 390, p: 26, c: 0.5, f: 32 },
-  { n: 'Leche semidesnatada', kcal: 46, p: 3.3, c: 4.8, f: 1.6, u: { label: '1 vaso', g: 250 } },
-  { n: 'Proteína whey (polvo)', kcal: 400, p: 80, c: 8, f: 6, u: { label: '1 scoop', g: 30 } },
-  { n: 'Copos de avena', kcal: 389, p: 16.9, c: 66, f: 6.9 },
-  { n: 'Arroz blanco (cocido)', kcal: 130, p: 2.7, c: 28, f: 0.3 },
-  { n: 'Arroz blanco (crudo)', kcal: 360, p: 7, c: 79, f: 0.6 },
-  { n: 'Pasta (cocida)', kcal: 158, p: 5.8, c: 31, f: 0.9 },
-  { n: 'Pasta (cruda)', kcal: 371, p: 13, c: 75, f: 1.5 },
-  { n: 'Pan blanco', kcal: 265, p: 9, c: 49, f: 3.2, u: { label: '1 rebanada', g: 30 } },
-  { n: 'Pan integral', kcal: 247, p: 13, c: 41, f: 3.4, u: { label: '1 rebanada', g: 30 } },
-  { n: 'Patata cocida', kcal: 87, p: 1.9, c: 20, f: 0.1 },
-  { n: 'Boniato', kcal: 86, p: 1.6, c: 20, f: 0.1 },
-  { n: 'Lentejas (cocidas)', kcal: 116, p: 9, c: 20, f: 0.4 },
-  { n: 'Garbanzos (cocidos)', kcal: 164, p: 8.9, c: 27, f: 2.6 },
-  { n: 'Plátano', kcal: 89, p: 1.1, c: 23, f: 0.3, u: { label: '1 plátano', g: 120 } },
-  { n: 'Manzana', kcal: 52, p: 0.3, c: 14, f: 0.2, u: { label: '1 manzana', g: 180 } },
-  { n: 'Naranja', kcal: 47, p: 0.9, c: 12, f: 0.1, u: { label: '1 naranja', g: 150 } },
-  { n: 'Frutos rojos', kcal: 50, p: 1, c: 12, f: 0.3 },
-  { n: 'Brócoli', kcal: 34, p: 2.8, c: 7, f: 0.4 },
-  { n: 'Ensalada (lechuga y tomate)', kcal: 18, p: 1, c: 3.5, f: 0.2 },
-  { n: 'Aguacate', kcal: 160, p: 2, c: 9, f: 15 },
-  { n: 'Aceite de oliva', kcal: 884, p: 0, c: 0, f: 100, u: { label: '1 cucharada', g: 10 } },
-  { n: 'Almendras', kcal: 579, p: 21, c: 22, f: 50, u: { label: 'puñado', g: 25 } },
-  { n: 'Nueces', kcal: 654, p: 15, c: 14, f: 65, u: { label: 'puñado', g: 25 } },
-  { n: 'Crema de cacahuete', kcal: 588, p: 25, c: 20, f: 50, u: { label: '1 cucharada', g: 15 } },
-  { n: 'Chocolate negro 85%', kcal: 600, p: 11, c: 20, f: 50, u: { label: '2 onzas', g: 20 } },
-  { n: 'Tortilla de patatas', kcal: 180, p: 6.5, c: 15, f: 11 },
-  { n: 'Pizza', kcal: 266, p: 11, c: 33, f: 10 },
-  { n: 'Cerveza', kcal: 43, p: 0.5, c: 3.6, f: 0, u: { label: '1 caña', g: 200 } },
-];
+const UNIT_ALIASES = {
+  g: 'g', gr: 'g', grs: 'g', gramo: 'g', gramos: 'g', ml: 'g', kg: 'kg', kilo: 'kg', l: 'kg', litro: 'kg',
+  vaso: 'vaso', vasos: 'vaso', taza: 'taza', tazas: 'taza', tazon: 'tazon', tazones: 'tazon', bol: 'bol', cuenco: 'cuenco',
+  cucharada: 'cucharada', cucharadas: 'cucharada', cucharadita: 'cucharadita', cucharaditas: 'cucharadita',
+  rebanada: 'rebanada', rebanadas: 'rebanada', plato: 'plato', platos: 'plato', racion: 'plato', raciones: 'plato',
+  punado: 'punado', punados: 'punado', lata: 'lata', latas: 'lata', pieza: 'pieza', piezas: 'pieza',
+  unidad: 'pieza', unidades: 'pieza', filete: 'plato', filetes: 'plato', loncha: 'loncha', lonchas: 'loncha',
+  onza: 'onza', onzas: 'onza', sobre: 'sobre', sobres: 'sobre', chorrito: 'chorrito', copa: 'copa', copas: 'copa',
+  cana: 'cana', canas: 'cana', tercio: 'tercio', jarra: 'jarra', scoop: 'scoop', scoops: 'scoop', cacito: 'cacito',
+  porcion: 'porcion', porciones: 'porcion', trozo: 'trozo', trozos: 'trozo', botellin: 'botellin',
+};
+const NUM_WORDS = { un: 1, una: 1, uno: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, medio: 0.5, media: 0.5 };
+const STOPWORDS = new Set(('con y de del la el los las a al sin en un una uno unos unas mi mis poco poca un poco algo ' +
+  'plancha frito frita fritos fritas horno asado asada cocido cocida hervido hervida casero casera natural grande pequeno ' +
+  'pequena medio media dos tres cuatro cinco seis siete ocho g gr gramos ml vaso vasos taza tazas cucharada cucharadas racion ' +
+  'plato platos para tomar desayuno comida cena merienda he comido tome hoy por').split(' '));
 
 /* ---------------------------------------------------------
    ESTADO
    --------------------------------------------------------- */
-let routine, gymLog, kneeLog, profile, runsManual, stravaCfg, food;
-let calPlan;  // { 'YYYY-MM-DD': [idEntreno…] } · plan elegido para un día concreto (si no, manda la rutina semanal)
-let dayLog;   // { 'YYYY-MM-DD': { done: ['run', …], note } } · lo que hiciste ese día
+let routines;  // { id: { label, type, items: [{ name, sets }] } } · tus rutinas
+let trainLog;  // { 'YYYY-MM-DD': [{ id, type, routineId, title, km, sec, min, note, done, ex }] }
+let kneeLog, profile, stravaCfg, food, myFoods;
 let foodOffset = 0;   // 0 = hoy, -1 = ayer…
 let kneeOffset = 0;
 let calCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-let selectedFood = null;
+let estimate = null;  // estimación de calorías pendiente de añadir
 let activities = [];
 let stravaSyncedAt = null;
 let stravaError = null;
@@ -127,115 +255,105 @@ const cache = {
 
 const foodDay = () => dateKey(addDays(foodOffset));
 const kneeDay = () => dateKey(addDays(kneeOffset));
+const round1 = (v) => Math.round(v * 10) / 10;
+const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9.,]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 function loadHealthState() {
-  routine = store.get('routine', DEFAULT_ROUTINE);
-  gymLog = store.get('gymLog', {});
-  calPlan = store.get('calPlan', {});
-  dayLog = store.get('dayLog', {});
+  // Si vienes de la versión anterior, se reaprovechan tus datos (sin escribir nada hasta que cambies algo)
+  routines = store.get('routines', null) ?? routinesFromOldVersion();
+  trainLog = store.get('trainLog', null) ?? trainLogFromOldVersion();
   kneeLog = store.get('knee', {});
   profile = store.get('profile', null);
-  runsManual = store.get('runs', null); // null = nunca registraste nada → ejemplo
   stravaCfg = store.get('strava', null);
-  strengthDone = store.get(`strength:${WEEK}`, {});
+  myFoods = store.get('myFoods', []);
   food = store.get(`food:${foodDay()}`, []);
   const cached = cache.get('strava');
-  if (cached?.list) { activities = cached.list; stravaSyncedAt = new Date(cached.at); }
+  if (cached?.list && stravaCfg) { activities = cached.list; stravaSyncedAt = new Date(cached.at); }
 }
+
+function routinesFromOldVersion() {
+  const old = store.get('routine', null);
+  const out = {};
+  if (!old) return out;
+  const isOldDefault = (w) => (w.label === 'Tren superior' && w.items?.[0]?.name === 'Press banca' && w.items.length === 5)
+    || (w.label === 'Piernas' && w.items?.[0]?.name === 'Sentadilla' && w.items.length === 5);
+  Object.entries(old.workouts || {}).forEach(([id, w]) => {
+    if (w.kind === 'rest' || isOldDefault(w) || (w.kind !== 'gym' && !w.items?.length)) return;
+    out[id] = { label: w.label, type: TYPES[w.kind] ? w.kind : 'other', items: w.items || [] };
+  });
+  return out;
+}
+
+function trainLogFromOldVersion() {
+  const log = {};
+  const add = (key, e) => (log[key] ||= []).push({ id: uid(), done: true, title: '', ...e });
+  (store.get('runs', null) || []).forEach((r) => add(r.date, { type: 'run', km: r.km, sec: r.sec }));
+  Object.keys(store.get('gymLog', {})).forEach((k) => add(k, { type: 'gym' }));
+  Object.entries(store.get('dayLog', {})).forEach(([k, d]) => {
+    (d.done || []).filter((t) => t === 'bike' || t === 'other').forEach((t) => add(k, { type: t }));
+    if (d.note) { if (log[k]?.length) log[k][0].note = d.note; else add(k, { type: 'other', note: d.note }); }
+  });
+  return log;
+}
+
+const saveTrainLog = () => store.set('trainLog', trainLog);
+const saveRoutines = () => store.set('routines', routines);
 
 /* ---------------------------------------------------------
-   UTILIDADES DE ENTRENO
+   ENTRENOS · utilidades
    --------------------------------------------------------- */
-const workoutFor = (weekday) => {
-  const id = routine.days[weekday];
-  return { id, ...(routine.workouts[id] || routine.workouts.rest || { label: 'Descanso', kind: 'rest', items: [] }) };
-};
-// Lo que toca un día: tu elección para esa fecha o, si no elegiste nada, la rutina semanal
-function plansFor(key) {
-  const ids = calPlan[key] ?? [routine.days[parseKey(key).getDay()]];
-  return ids.filter((id) => routine.workouts[id]).map((id) => ({ id, ...routine.workouts[id] }));
-}
-const REST = { id: 'rest', label: 'Descanso', kind: 'rest', items: [] };
-const todayWorkout = () => plansFor(TODAY).find((p) => p.kind !== 'rest') || plansFor(TODAY)[0] || REST;
-const runPlannedToday = () => plansFor(TODAY).some((p) => p.kind === 'run');
-
-// Qué hiciste un día (Strava, carreras apuntadas, gimnasio marcado y tu registro del día)
-function didOn(key) {
-  const acts = actsOn(key);
-  const done = dayLog[key]?.done || [];
-  return {
-    gym: !!gymLog[key] || done.includes('gym') || acts.some((a) => kindOf(a.type) === 'gym'),
-    run: done.includes('run') || acts.some((a) => kindOf(a.type) === 'run') || (runsManual || []).some((r) => r.date === key),
-    bike: done.includes('bike') || acts.some((a) => kindOf(a.type) === 'bike'),
-    other: done.includes('other'),
-  };
-}
-
 function kindOf(type = '') {
   if (/Run/.test(type)) return 'run';
   if (/Ride|Cycl/.test(type)) return 'bike';
   if (/Weight|Workout|Crossfit|HIIT/.test(type)) return 'gym';
   return 'other';
 }
-const actsOn = (key) => activities.filter((a) => a.start.slice(0, 10) === key);
 
-function allRuns() {
-  const strava = activities
-    .filter((a) => kindOf(a.type) === 'run' && a.km > 0)
-    .map((a) => ({ date: a.start.slice(0, 10), km: a.km, sec: a.sec, name: a.name, source: 'strava' }));
-  if (!strava.length && runsManual === null) return DEFAULT_RUNS;
-  return [...strava, ...(runsManual || [])].sort((a, b) => a.date.localeCompare(b.date));
+// Lo que tienes apuntado un día (más tus actividades de Strava, si algún día conectas el puente)
+function entriesOn(key) {
+  const own = trainLog[key] || [];
+  const strava = activities.filter((a) => a.start.slice(0, 10) === key).map((a) => ({
+    id: `s${a.id}`, type: kindOf(a.type), title: a.name, km: a.km || null, sec: a.sec, done: true, strava: true,
+  }));
+  return [...own, ...strava];
 }
+
+const entryTitle = (e) => e.title || routines[e.routineId]?.label || TYPES[e.type]?.label || 'Entreno';
+
+function entryDetail(e) {
+  const bits = [];
+  if (e.km) bits.push(`${e.km} km`);
+  if (e.sec) bits.push(fmtDuration(e.sec));
+  if (e.km && e.sec) bits.push(e.type === 'bike' ? `${round1(e.km / (e.sec / 3600))} km/h` : `${fmtPace(e.sec / e.km)} /km`);
+  if (e.min) bits.push(`${e.min} min`);
+  return bits.join(' · ');
+}
+
+// Todas las carreras con distancia y tiempo (para gráficas y rodillas)
+function allRuns() {
+  const runs = [];
+  Object.keys(trainLog).forEach((key) => entriesOn(key).forEach((e) => {
+    if (e.type === 'run' && e.done && e.km && e.sec) runs.push({ date: key, km: e.km, sec: e.sec, name: entryTitle(e) });
+  }));
+  activities.filter((a) => kindOf(a.type) === 'run' && a.km && !trainLog[a.start.slice(0, 10)])
+    .forEach((a) => runs.push({ date: a.start.slice(0, 10), km: a.km, sec: a.sec, name: a.name }));
+  return runs.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+const fmtDuration = (sec) => {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.round(sec % 60);
+  return h ? `${h} h ${pad(m)} min` : `${m}:${pad(s)} min`;
+};
+
+// "5:30" → segundos ; acepta también "1:02:30"
+const parseClock = (str) => (/^\d{1,3}:\d{2}(:\d{2})?$/.test(String(str).trim()) ? parseTime(String(str).trim()) : 0);
 
 // Peor rodilla de un día, o null si ese día no apuntaste dolor
 const maxPain = (entry) => (entry && (entry.l != null || entry.r != null) ? Math.max(entry.l ?? 0, entry.r ?? 0) : null);
-
-const paceRange = () => `${fmtPace(HEALTH.pace.min)}–${fmtPace(HEALTH.pace.max)}`;
-const painClass = (v) => (v == null ? '' : v <= HEALTH.knee.painLimit ? 'ok' : v <= 6 ? 'warn' : 'bad');
+const painClass = (v) => (v == null ? '' : v <= 3 ? 'ok' : v <= 6 ? 'warn' : 'bad');
 
 /* ---------------------------------------------------------
-   RODILLAS · plan de vuelta a correr
-   Cada salida desde el inicio del plan cuenta si llega a la distancia del paso
-   y el dolor de ese día (la peor rodilla) no supera el límite.
-   --------------------------------------------------------- */
-function kneeStatus() {
-  const { start, steps, runsPerStep, painLimit } = HEALTH.knee;
-  let step = 0, okCount = 0;
-  const history = [];
-  for (const r of allRuns().filter((x) => x.date >= start)) {
-    if (step >= steps.length) break;
-    const max = maxPain(kneeLog[r.date]);
-    const target = steps[step];
-    let result;
-    if (max == null) result = 'sin dolor apuntado';
-    else if (max > painLimit) { result = 'dolor alto'; okCount = 0; }
-    else if (r.km >= target * 0.9) {
-      result = 'ok';
-      if (++okCount >= runsPerStep) { step++; okCount = 0; }
-    } else result = 'más corta';
-    history.push({ ...r, max, result, target });
-  }
-  const lastLogged = Object.keys(kneeLog).filter((k) => k <= TODAY && maxPain(kneeLog[k]) != null).sort().at(-1);
-  const lastPain = lastLogged ? maxPain(kneeLog[lastLogged]) : null;
-  return { step, okCount, done: step >= steps.length, history, lastLogged, lastPain };
-}
-
-function kneeAdvice(st = kneeStatus()) {
-  const { steps, painLimit } = HEALTH.knee;
-  if (TODAY < HEALTH.knee.start) return `El plan empieza el ${parseKey(HEALTH.knee.start).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}: primera salida de ${steps[0]} km a ${paceRange()} /km.`;
-  if (st.done) return 'Has completado el plan. Antes de subir más kilómetros, coméntalo con tu médico o fisio.';
-  const recent = st.lastLogged && daysUntil(parseKey(st.lastLogged)) >= -2;
-  if (recent && st.lastPain > painLimit) {
-    return `Tu último dolor fue ${st.lastPain}/10 (tu límite es ${painLimit}). Según tu plan no subas de paso: descansa o repite distancia, y si sigue, coméntalo con tu médico.`;
-  }
-  const km = steps[st.step];
-  return runPlannedToday()
-    ? `Hoy toca correr ${km} km a ${paceRange()} /km. Apunta el dolor al terminar y mañana por la mañana.`
-    : `Próxima salida: ${km} km a ${paceRange()} /km.`;
-}
-
-/* ---------------------------------------------------------
-   NUTRICIÓN · Mifflin-St Jeor
+   NUTRICIÓN · objetivo (Mifflin-St Jeor) y estimación de comida casera
    --------------------------------------------------------- */
 function nutritionTargets() {
   const p = profile;
@@ -244,12 +362,8 @@ function nutritionTargets() {
   const tdee = bmr * (p.activity || 1.55);
   const kcal = Math.round(tdee - (p.deficit ?? 400));
   return {
-    bmr: Math.round(bmr),
-    tdee: Math.round(tdee),
-    deficit: p.deficit ?? 400,
-    kcal,
-    protein: Math.round(p.weight * (p.proteinPerKg || 1.8)),
-    belowBmr: kcal < bmr,
+    bmr: Math.round(bmr), tdee: Math.round(tdee), deficit: p.deficit ?? 400, kcal,
+    protein: Math.round(p.weight * (p.proteinPerKg || 1.8)), belowBmr: kcal < bmr,
   };
 }
 
@@ -257,71 +371,142 @@ const sumFood = (list) => list.reduce((t, i) => ({
   kcal: t.kcal + i.kcal, p: t.p + i.p, c: t.c + i.c, f: t.f + i.f,
 }), { kcal: 0, p: 0, c: 0, f: 0 });
 
-const round1 = (v) => Math.round(v * 10) / 10;
+// Lista de alimentos para buscar: primero tus comidas guardadas, luego la tabla casera
+function foodIndex() {
+  const mine = myFoods.map((m) => ({ n: m.n, a: [norm(m.n)], mine: m, kcal: m.kcal, p: m.p, c: m.c, f: m.f, g: 1, each: 1 }));
+  const list = [];
+  [...mine, ...FOODS].forEach((f) => f.a.forEach((alias) => list.push({ alias: norm(alias), food: f })));
+  return list.sort((a, b) => b.alias.length - a.alias.length);
+}
+
+// Cantidad escrita justo antes del alimento: "2", "200 g de", "un vaso de", "media"…
+function quantityBefore(text, food, aliasUnit) {
+  const m = text.match(/(\d+(?:[.,]\d+)?|un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|medio|media)?\s*([a-z]+)?(?:\s+de)?\s*$/);
+  if (!m) return null;
+  const n = m[1] ? (NUM_WORDS[m[1]] ?? parseFloat(m[1].replace(',', '.'))) : null;
+  const unit = m[2] && UNIT_ALIASES[m[2]] ? UNIT_ALIASES[m[2]] : null;
+  if (n == null && !unit) return null;
+  if (food.mine) return (n ?? 1);                       // tus comidas: en raciones
+  const count = n ?? 1;
+  if (unit === 'g') return count;
+  if (unit === 'kg') return count * 1000;
+  if (unit) {
+    const g = food.units?.[unit] ?? { pieza: food.each, plato: food.g, lata: food.g, porcion: food.g, trozo: food.g }[unit] ?? UNIT_G[unit];
+    return count * (g || food.g);
+  }
+  return count * (aliasUnit || food.each || food.g);
+}
+
+function estimateFood(text) {
+  const t = ` ${norm(text)} `;
+  const taken = new Array(t.length).fill(false);
+  const parts = [];
+  foodIndex().forEach(({ alias, food }) => {
+    const re = new RegExp(`(?<= )${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?= )`, 'g');
+    let m;
+    while ((m = re.exec(t))) {
+      const start = m.index, end = start + alias.length;
+      if (taken.slice(start, end).some(Boolean)) continue;
+      if (/\bsin\s+$/.test(t.slice(Math.max(0, start - 5), start))) { taken.fill(true, start, end); continue; } // "sin azúcar"
+      // Texto anterior hasta la última comida reconocida o separador, para leer la cantidad
+      let from = start;
+      while (from > 0 && !taken[from - 1] && !/[,]/.test(t[from - 1])) from--;
+      const before = t.slice(from, start).replace(/^.*\b(?:con|y)\s+/, '').trim();
+      const aliasUnit = food.units?.[alias]; // "caña", "tercio"… ya dicen la cantidad
+      const qty = quantityBefore(before, food, aliasUnit);
+      const amount = qty ?? (aliasUnit || (food.mine ? 1 : food.g));
+      taken.fill(true, start, end);
+      parts.push({ pos: start, food, amount });
+    }
+  });
+  parts.sort((a, b) => a.pos - b.pos);
+
+  // En tostadas, el tomate es rallado (unos 20 g por tostada)
+  const toast = parts.find((p) => p.food.n.startsWith('Tostada'));
+  const tomato = parts.find((p) => p.food.n === 'Tomate');
+  if (toast && tomato) {
+    tomato.food = FOODS.find((f) => f.n === 'Tomate rallado');
+    tomato.amount = Math.max(20, Math.round(toast.amount / (toast.food.each || 35)) * 20);
+  }
+
+  // Forma de cocinar: añade el aceite que no escribes
+  if (/\bplancha\b/.test(t) && !parts.some((p) => p.food.n.startsWith('Aceite'))) {
+    parts.push({ pos: t.length, food: { n: 'Aceite (plancha)', kcal: 884, p: 0, c: 0, f: 100, g: 5 }, amount: 5, auto: true });
+  }
+  if (/\b(frito|frita|fritos|fritas|rebozado|rebozada)\b/.test(t) && !parts.some((p) => /fritas|Aceite|frito/i.test(p.food.n))) {
+    parts.push({ pos: t.length, food: { n: 'Aceite (fritura)', kcal: 884, p: 0, c: 0, f: 100, g: 10 }, amount: 10, auto: true });
+  }
+
+  // Palabras que no he reconocido
+  const unknown = [];
+  t.split(' ').reduce((pos, w) => {
+    if (w && !taken[pos] && !STOPWORDS.has(w) && !/^\d+([.,]\d+)?$/.test(w) && !UNIT_ALIASES[w]) unknown.push(w);
+    return pos + w.length + 1;
+  }, 0);
+
+  return { text, parts, unknown: [...new Set(unknown)] };
+}
+
+// Nutrientes de una parte de la estimación según la cantidad
+function partNutrients(part) {
+  const f = part.food;
+  const factor = f.mine ? part.amount : part.amount / 100;
+  return { kcal: f.kcal * factor, p: f.p * factor, c: f.c * factor, f: f.f * factor };
+}
 
 /* ---------------------------------------------------------
    TEXTO PARA EL BRIEFING (lo usa app.js)
+   Solo cuenta lo que tú has apuntado: no propone entrenos.
    --------------------------------------------------------- */
-function planText(w) {
-  if (w.kind === 'gym') return `<strong>gimnasio · ${esc(w.label)}</strong> (${w.items.length} ejercicios)`;
-  if (w.kind === 'bike') return '<strong>bici</strong>';
-  if (w.kind !== 'run') return `<strong>${esc(w.label)}</strong>`;
-  const st = kneeStatus();
-  if (TODAY < HEALTH.knee.start) {
-    return `<strong>correr</strong> (tu plan de rodillas empieza el ${parseKey(HEALTH.knee.start).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })} con ${HEALTH.knee.steps[0]} km a ${paceRange()} /km)`;
-  }
-  return st.done
-    ? `<strong>correr</strong> a ${paceRange()} /km`
-    : `<strong>correr ${HEALTH.knee.steps[st.step]} km</strong> a ${paceRange()} /km (paso ${st.step + 1} de ${HEALTH.knee.steps.length} del plan de rodillas)`;
+function todayWorkout() {
+  const e = (trainLog[TODAY] || [])[0];
+  return e ? { kind: e.type, label: entryTitle(e) } : { kind: 'rest', label: 'Nada apuntado' };
 }
 
 function healthBriefing() {
-  const plans = plansFor(TODAY).filter((p) => p.kind !== 'rest');
-  const parts = [plans.length ? `Hoy toca ${joinEs(plans.map(planText))}.` : 'Hoy toca <strong>descanso</strong>.'];
-  if (maxPain(kneeLog[TODAY]) == null) parts.push('Recuerda apuntar el dolor de rodillas de hoy.');
+  const parts = [];
+  const today = trainLog[TODAY] || [];
+  const done = today.filter((e) => e.done), planned = today.filter((e) => !e.done);
+  const list = (arr) => joinEs(arr.map((e) => `<strong>${esc(entryTitle(e))}</strong>${entryDetail(e) ? ` (${esc(entryDetail(e))})` : ''}`));
+  if (planned.length) parts.push(`Para hoy tienes apuntado: ${list(planned)}.`);
+  if (done.length) parts.push(`Hoy ya has hecho: ${list(done)}.`);
+  if (Object.keys(kneeLog).length && maxPain(kneeLog[TODAY]) == null) parts.push('Aún no has apuntado el dolor de rodillas de hoy.');
   const t = nutritionTargets();
   if (t) {
-    const today = sumFood(store.get(`food:${TODAY}`, []));
-    parts.push(`Llevas <strong>${Math.round(today.kcal)} de ${t.kcal} kcal</strong> y ${Math.round(today.p)} de ${t.protein} g de proteína.`);
+    const s = sumFood(store.get(`food:${TODAY}`, []));
+    parts.push(`Llevas <strong>${Math.round(s.kcal)} de ${t.kcal} kcal</strong> y ${Math.round(s.p)} de ${t.protein} g de proteína.`);
   }
-  return parts.join(' ');
+  return parts.join(' ') || 'Hoy no tienes entrenos apuntados.';
 }
 
 /* ---------------------------------------------------------
-   RENDER · Rutina de fuerza
+   RENDER · Mis rutinas
    --------------------------------------------------------- */
-function renderStrength() {
-  const todayIds = new Set(plansFor(TODAY).map((p) => p.id));
-  const gyms = Object.entries(routine.workouts).filter(([, w]) => w.kind === 'gym');
-  if (!gyms.length) {
-    $('#strength').innerHTML = '<p class="muted small">No tienes entrenamientos de gimnasio. Añádelos en «Editar rutina».</p>';
+function renderRoutines() {
+  const list = Object.entries(routines);
+  if (!list.length) {
+    $('#routinesList').innerHTML = '<p class="muted small">Aún no tienes rutinas. Crea las tuyas con «Nueva rutina»: nombre, tipo y, si quieres, los ejercicios.</p>';
     return;
   }
-  $('#strength').innerHTML = gyms.map(([id, w]) => {
-    const done = strengthDone[id] || [];
-    const pct = w.items.length ? Math.round((done.length / w.items.length) * 100) : 0;
-    const days = Object.entries(routine.days).filter(([, wid]) => wid === id).map(([d]) => WEEKDAYS[d].slice(0, 3)).join(' · ');
+  $('#routinesList').innerHTML = list.map(([id, r]) => {
+    const t = TYPES[r.type] || TYPES.other;
     return `
-      <div class="routine ${todayIds.has(id) ? 'is-today' : ''}" data-routine="${id}">
+      <div class="routine" data-routine="${id}">
         <div class="routine-head">
-          <span>${esc(w.label)}</span>
-          ${todayIds.has(id) ? tagHTML('salud', 'Hoy') : `<span class="muted small">${days}</span>`}
-          <span class="muted small">${done.length}/${w.items.length}</span>
+          <span>${esc(r.label)}</span>
+          <span class="tag" style="--c:var(--c-${t.color})">${t.label}</span>
+          <span class="routine-actions">
+            <button class="btn btn-sm btn-ghost" type="button" data-routine-today="${id}">Hecha hoy</button>
+            <button class="icon-btn" type="button" data-routine-edit="${id}" aria-label="Editar rutina">✎</button>
+          </span>
         </div>
-        <div class="bar" style="--c:var(--c-salud)"><span style="--p:${pct}%"></span></div>
-        <ul class="checklist">
-          ${w.items.map((it, i) => `
-            <li><label class="check">
-              <input type="checkbox" data-i="${i}" ${done.includes(i) ? 'checked' : ''}>
-              <span>${esc(it.name)}</span><em>${esc(it.sets)}</em>
-            </label></li>`).join('')}
-        </ul>
+        ${r.items.length ? `<ul class="routine-items">${r.items.map((i) => `<li><span>${esc(i.name)}</span>${i.sets ? `<em>${esc(i.sets)}</em>` : ''}</li>`).join('')}</ul>` : ''}
       </div>`;
   }).join('');
 }
 
 /* ---------------------------------------------------------
-   RENDER · Running
+   RENDER · Running (tus carreras apuntadas)
    --------------------------------------------------------- */
 function renderRunning() {
   const runs = allRuns();
@@ -329,47 +514,36 @@ function renderRunning() {
   const recent = runs.slice(-5);
   const avgPace = recent.length ? recent.reduce((s, r) => s + r.sec, 0) / recent.reduce((s, r) => s + r.km, 0) : 0;
   const weekKm = runs.filter((r) => parseKey(r.date) >= mondayOf()).reduce((s, r) => s + r.km, 0);
-  const lastPace = last ? last.sec / last.km : 0;
-  // Verde: dentro del ritmo o más suave. Ámbar: más rápido de lo planeado.
-  const paceCls = (p) => (!p ? '' : p < HEALTH.pace.min ? 'warn' : 'ok');
-
-  $('#runTag').textContent = `Ritmo ${paceRange()} /km`;
-  $('#runSource').innerHTML = stravaCfg?.url
-    ? (stravaError
-      ? `<span class="bad-text">Strava: ${esc(stravaError)}</span> · <button class="link-btn" data-strava="open" type="button">Revisar</button>`
-      : `Strava${stravaSyncedAt ? ` · ${fmtHour(stravaSyncedAt)}` : ' · cargando…'}`)
-    : `${runsManual === null ? 'Ejemplo' : 'Manual'} · <button class="link-btn" data-strava="open" type="button">Conectar Strava</button>`;
+  const monthKm = runs.filter((r) => r.date.slice(0, 7) === TODAY.slice(0, 7)).reduce((s, r) => s + r.km, 0);
 
   $('#runKpis').innerHTML = `
-    <div class="kpi"><b class="${paceCls(lastPace)}">${last ? fmtPace(lastPace) : '—'}</b><span>Último ritmo /km</span></div>
-    <div class="kpi"><b class="${paceCls(avgPace)}">${avgPace ? fmtPace(avgPace) : '—'}</b><span>Media últimas 5</span></div>
-    <div class="kpi"><b>${weekKm.toFixed(1)}</b><span>km esta semana</span></div>`;
+    <div class="kpi"><b>${last ? fmtPace(last.sec / last.km) : '—'}</b><span>Último ritmo /km</span></div>
+    <div class="kpi"><b>${avgPace ? fmtPace(avgPace) : '—'}</b><span>Media últimas 5</span></div>
+    <div class="kpi"><b>${round1(weekKm)}</b><span>km semana · ${round1(monthKm)} mes</span></div>`;
 
-  // Barra más alta = más rápido. Las líneas marcan la franja de ritmo objetivo.
-  const SLOW = 7 * 60 + 30, FAST = 4 * 60 + 30, MAX_H = 64;
-  const hFor = (p) => clamp((SLOW - p) / (SLOW - FAST), 0.08, 1) * MAX_H;
-  $('#paceChart').innerHTML = `
-    ${runs.slice(-8).map((r) => {
-      const p = r.sec / r.km;
-      const d = parseKey(r.date);
-      return `<div class="col" title="${esc(r.name || 'Carrera')} · ${r.km} km · ${fmtPace(p)} /km">
-        <em>${fmtPace(p)}</em>
-        <i class="${paceCls(p)}" style="height:${hFor(p)}px"></i>
-        <small>${d.getDate()}/${d.getMonth() + 1}</small>
-      </div>`;
-    }).join('') || '<p class="muted small">Sin carreras todavía.</p>'}
-    <div class="target" style="bottom:${18 + hFor(HEALTH.pace.min)}px"><span>${paceRange()}</span></div>
-    <div class="target" style="bottom:${18 + hFor(HEALTH.pace.max)}px"></div>`;
+  if (!runs.length) {
+    $('#paceChart').innerHTML = '<p class="muted small">Aún no has apuntado carreras. Añádelas aquí abajo o desde el calendario.</p>';
+    return;
+  }
+  // Barras: más altas = más km. Encima, el ritmo de cada salida.
+  const last10 = runs.slice(-10);
+  const maxKm = Math.max(...last10.map((r) => r.km), 1);
+  $('#paceChart').innerHTML = last10.map((r) => {
+    const d = parseKey(r.date);
+    return `<div class="col" title="${esc(r.name)} · ${r.km} km · ${fmtPace(r.sec / r.km)} /km">
+      <em>${fmtPace(r.sec / r.km)}</em>
+      <i style="height:${Math.max(6, (r.km / maxKm) * 64)}px"></i>
+      <small>${d.getDate()}/${d.getMonth() + 1}</small>
+    </div>`;
+  }).join('');
 }
 
 /* ---------------------------------------------------------
-   RENDER · Rodillas
+   RENDER · Rodillas (solo tu registro de dolor)
    --------------------------------------------------------- */
 function renderKnee() {
   const key = kneeDay();
   const entry = kneeLog[key] || {};
-  const st = kneeStatus();
-  const { steps, runsPerStep, painLimit } = HEALTH.knee;
   const dayLabel = kneeOffset === 0 ? 'Hoy' : kneeOffset === -1 ? 'Ayer' : parseKey(key).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
   const slider = (side, label) => {
     const v = entry[side];
@@ -380,6 +554,7 @@ function renderKnee() {
         <b class="${painClass(v)}">${v ?? '–'}</b>
       </label>`;
   };
+  const runsHere = (trainLog[key] || []).filter((e) => e.type === 'run' && e.km);
 
   $('#kneePanel').innerHTML = `
     <h3>Rodillas
@@ -389,21 +564,13 @@ function renderKnee() {
         <button class="icon-btn" data-knee-nav="1" type="button" aria-label="Día siguiente" ${kneeOffset >= 0 ? 'disabled' : ''}>›</button>
       </span>
     </h3>
-    <p class="muted small">Dolor de 0 (nada) a 10 (máximo). Tu límite para subir de paso: ${painLimit}.</p>
+    <p class="muted small">Dolor de 0 (nada) a 10 (máximo).</p>
     ${slider('l', 'Izquierda')}
     ${slider('r', 'Derecha')}
     <button class="btn btn-sm btn-ghost" type="button" data-knee-zero>Sin dolor en ninguna (0 y 0)</button>
     <input type="text" class="knee-note" data-side="note" maxlength="140" placeholder="Nota (p. ej. molestia al bajar escaleras)" value="${esc(entry.note || '')}">
-
-    <div class="steps">
-      ${steps.map((km, i) => `
-        <span class="step ${i < st.step ? 'is-done' : i === st.step && !st.done ? 'is-current' : ''}">
-          ${km} km${i < st.step ? ' ✓' : i === st.step && !st.done ? ` · ${st.okCount}/${runsPerStep}` : ''}
-        </span>`).join('')}
-    </div>
-    <p class="knee-advice">${esc(kneeAdvice(st))}</p>
-    ${kneeChart()}
-    ${st.history.length ? `<p class="muted small">Última salida del plan: ${st.history.at(-1).km} km · ${st.history.at(-1).result}.</p>` : ''}`;
+    ${runsHere.length ? `<p class="muted small">Ese día corriste ${joinEs(runsHere.map((e) => `${e.km} km`))}.</p>` : ''}
+    ${kneeChart()}`;
 }
 
 // Últimos 28 días: dolor de cada rodilla (líneas) y km corridos (barras)
@@ -414,20 +581,19 @@ function kneeChart() {
   const keys = Array.from({ length: DAYS }, (_, i) => dateKey(addDays(i - DAYS + 1)));
   const runsByDay = {};
   allRuns().forEach((r) => { runsByDay[r.date] = (runsByDay[r.date] || 0) + r.km; });
+  const maxKm = Math.max(5, ...Object.values(runsByDay));
   const line = (side) => keys
     .map((k, i) => (kneeLog[k]?.[side] != null ? `${x(i).toFixed(1)},${y(kneeLog[k][side]).toFixed(1)}` : null))
     .filter(Boolean).join(' ');
   const bars = keys.map((k, i) => {
     const km = runsByDay[k];
     if (!km) return '';
-    const h = Math.min(km / 10, 1) * 40;
-    return `<rect x="${(x(i) - 3).toFixed(1)}" y="${(base - h).toFixed(1)}" width="6" height="${h.toFixed(1)}" rx="1.5" class="kc-run"><title>${k}: ${km.toFixed(1)} km</title></rect>`;
+    const h = (km / maxKm) * 40;
+    return `<rect x="${(x(i) - 3).toFixed(1)}" y="${(base - h).toFixed(1)}" width="6" height="${h.toFixed(1)}" rx="1.5" class="kc-run"><title>${k}: ${round1(km)} km</title></rect>`;
   }).join('');
-  const limitY = y(HEALTH.knee.painLimit).toFixed(1);
   return `
     <svg class="knee-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Dolor de rodillas y kilómetros de los últimos 28 días">
       ${bars}
-      <line x1="0" x2="${W}" y1="${limitY}" y2="${limitY}" class="kc-limit"/>
       <polyline points="${line('l')}" class="kc-l"/>
       <polyline points="${line('r')}" class="kc-r"/>
       <line x1="0" x2="${W}" y1="${base}" y2="${base}" class="kc-base"/>
@@ -435,52 +601,39 @@ function kneeChart() {
       <text x="${W}" y="${H - 1}" text-anchor="end" class="kc-label">hoy</text>
     </svg>
     <div class="legend">
-      <span><i class="lg-l"></i>Izquierda</span><span><i class="lg-r"></i>Derecha</span>
-      <span><i class="lg-run"></i>km</span><span><i class="lg-limit"></i>Límite ${HEALTH.knee.painLimit}</span>
+      <span><i class="lg-l"></i>Izquierda</span><span><i class="lg-r"></i>Derecha</span><span><i class="lg-run"></i>km corridos</span>
     </div>`;
 }
 
 /* ---------------------------------------------------------
-   RENDER · Calendario de entrenos
+   RENDER · Calendario (lo que tú apuntas)
    --------------------------------------------------------- */
 function renderCalendar() {
   const y = calCursor.getFullYear(), m = calCursor.getMonth();
   const offset = (new Date(y, m, 1).getDay() + 6) % 7; // lunes primero
   const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const stats = { gym: 0, gymPlanned: 0, run: 0, runKm: 0, bike: 0, bikeKm: 0, other: 0 };
-  const runsManualByDay = {};
-  (runsManual || []).forEach((r) => { runsManualByDay[r.date] = (runsManualByDay[r.date] || 0) + r.km; });
+  const stats = { gym: 0, run: 0, runKm: 0, bike: 0, bikeKm: 0, other: 0 };
 
   let cells = '<span class="cal-pad"></span>'.repeat(offset);
   for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(y, m, d);
-    const key = dateKey(date);
-    const plans = plansFor(key).filter((p) => p.kind !== 'rest');
-    const custom = calPlan[key] !== undefined;
-    const acts = actsOn(key);
-    const did = didOn(key);
-    const note = dayLog[key]?.note;
-    const past = key < TODAY;
-    if (key <= TODAY && plans.some((p) => p.kind === 'gym')) stats.gymPlanned++;
-    if (did.gym) stats.gym++;
-    if (did.other) stats.other++;
-    if (did.run) { stats.run++; stats.runKm += acts.filter((a) => kindOf(a.type) === 'run').reduce((s, a) => s + a.km, 0) + (runsManualByDay[key] || 0); }
-    if (did.bike) { stats.bike++; stats.bikeKm += acts.filter((a) => kindOf(a.type) === 'bike').reduce((s, a) => s + a.km, 0); }
-    const missed = past && plans.some((p) => p.kind in did && !did[p.kind]);
-    const title = [
-      `${WEEKDAYS[date.getDay()]} ${d}: ${plans.length ? `toca ${plans.map((p) => p.label).join(' + ')}` : 'descanso'}${custom ? ' (elegido para este día)' : ''}`,
-      ...acts.map((a) => `${a.name} (${a.km ? `${a.km} km` : fmtDuration(a.sec)})`),
-      note ? `Nota: ${note}` : '',
-    ].filter(Boolean).join('\n');
+    const key = dateKey(new Date(y, m, d));
+    const entries = entriesOn(key);
+    entries.filter((e) => e.done).forEach((e) => {
+      stats[e.type] = (stats[e.type] || 0) + 1;
+      if (e.type === 'run') stats.runKm += e.km || 0;
+      if (e.type === 'bike') stats.bikeKm += e.km || 0;
+    });
+    const shown = entries.slice(0, 2);
+    const title = entries.map((e) => `${e.done ? '✓' : '○'} ${entryTitle(e)}${entryDetail(e) ? ` · ${entryDetail(e)}` : ''}`).join('\n');
     cells += `
-      <button type="button" class="cal-day ${key === TODAY ? 'is-today' : ''} ${missed ? 'is-missed' : ''} ${key > TODAY ? 'is-future' : ''} ${custom ? 'is-custom' : ''}"
-        data-date="${key}" title="${esc(title)}">
-        <span class="cal-num">${d}${note ? '<em class="cal-note" aria-label="Tiene nota">✎</em>' : ''}</span>
+      <button type="button" class="cal-day ${key === TODAY ? 'is-today' : ''} ${key > TODAY ? 'is-future' : ''}" data-date="${key}" title="${esc(title || 'Toca para apuntar')}">
+        <span class="cal-num">${d}</span>
         <span class="cal-plans">
-          ${plans.map((p) => `<span class="cal-plan" style="--c:var(--c-${KIND_COLOR[p.kind]})">${esc(p.label)}</span>`).join('') || '<span class="cal-plan" style="--c:var(--muted)">Descanso</span>'}
+          ${shown.map((e) => `<span class="cal-plan ${e.done ? '' : 'is-planned'}" style="--c:var(--c-${(TYPES[e.type] || TYPES.other).color})">${esc(entryTitle(e))}</span>`).join('')}
+          ${entries.length > 2 ? `<span class="cal-more">+${entries.length - 2}</span>` : ''}
         </span>
         <span class="cal-dots">
-          ${DONE_KINDS.filter((k) => did[k]).map((k) => `<i style="--c:var(--c-${KIND_COLOR[k]})"></i>`).join('')}
+          ${entries.map((e) => `<i class="${e.done ? '' : 'is-planned'}" style="--c:var(--c-${(TYPES[e.type] || TYPES.other).color})"></i>`).join('')}
         </span>
       </button>`;
   }
@@ -488,86 +641,106 @@ function renderCalendar() {
   $('#calTitle').textContent = capitalize(calCursor.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }));
   $('#calendar').innerHTML = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => `<span class="cal-wd">${d}</span>`).join('') + cells;
   $('#calStats').innerHTML = `
-    <div class="stat" style="--c:var(--c-salud)"><b>${stats.gym}${stats.gymPlanned ? `<small>/${stats.gymPlanned}</small>` : ''}</b><span>Días de gimnasio</span><i></i></div>
-    <div class="stat" style="--c:var(--c-viaje)"><b>${stats.run}</b><span>Carreras · ${stats.runKm.toFixed(1)} km</span><i></i></div>
-    <div class="stat" style="--c:var(--c-proyecto)"><b>${stats.bike}</b><span>Salidas en bici · ${Math.round(stats.bikeKm)} km</span><i></i></div>
-    ${stats.other ? `<div class="stat" style="--c:var(--c-uni)"><b>${stats.other}</b><span>Otros entrenos</span><i></i></div>` : ''}`;
+    <div class="stat" style="--c:var(--c-salud)"><b>${stats.gym}</b><span>Gimnasio</span><i></i></div>
+    <div class="stat" style="--c:var(--c-viaje)"><b>${stats.run}</b><span>Carreras · ${round1(stats.runKm)} km</span><i></i></div>
+    <div class="stat" style="--c:var(--c-proyecto)"><b>${stats.bike}</b><span>Bici · ${Math.round(stats.bikeKm)} km</span><i></i></div>
+    ${stats.other ? `<div class="stat" style="--c:var(--c-uni)"><b>${stats.other}</b><span>Otros</span><i></i></div>` : ''}`;
 }
 
 /* ---------------------------------------------------------
-   FICHA DE UN DÍA · qué vas a hacer y qué hiciste
+   FICHA DE UN DÍA · añadir lo que vas a hacer o lo que hiciste
    --------------------------------------------------------- */
-function openDayEditor(key) {
-  const dialog = $('#dayDialog');
-  const date = parseKey(key);
-  const future = key > TODAY;
-  const planned = new Set(plansFor(key).map((p) => p.id));
-  const weekly = routine.workouts[routine.days[date.getDay()]];
-  dialog.dataset.date = key;
-
-  $('#dayTitle').textContent = capitalize(date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }));
-  $('#dayPlan').innerHTML = `
-    <div class="day-checks">
-      ${Object.entries(routine.workouts).filter(([, w]) => w.kind !== 'rest').map(([id, w]) => `
-        <label class="check" style="--c:var(--c-${KIND_COLOR[w.kind]})">
-          <input type="checkbox" value="${id}" ${planned.has(id) ? 'checked' : ''}><span>${esc(w.label)}</span>
-          <em>${KINDS[w.kind]}</em>
-        </label>`).join('')}
-    </div>
-    <p class="muted small">
-      ${calPlan[key] !== undefined ? 'Plan elegido solo para este día.' : `Según tu rutina semanal (${WEEKDAYS[date.getDay()].toLowerCase()}: ${esc(weekly?.label || 'Descanso')}).`}
-      <button class="link-btn" type="button" data-day-reset>Volver a la rutina semanal</button>
-    </p>`;
-
-  const did = didOn(key);
-  const run = (runsManual || []).find((r) => r.date === key);
-  $('#dayDoneWrap').hidden = future;
-  $('#dayDone').innerHTML = DONE_KINDS.map((k) => `
-    <label class="check" style="--c:var(--c-${KIND_COLOR[k]})">
-      <input type="checkbox" value="${k}" ${did[k] ? 'checked' : ''}><span>${k === 'other' ? 'Otro entreno' : KINDS[k]}</span>
-    </label>`).join('');
-  $('#dayRun').hidden = !did.run;
-  $('#dayRunKm').value = run?.km ?? '';
-  $('#dayRunTime').value = run ? `${Math.floor(run.sec / 60)}:${pad(run.sec % 60)}` : '';
-  $('#dayNote').value = dayLog[key]?.note || '';
-  dialog.showModal();
+function openDay(key) {
+  $('#dayDialog').dataset.date = key;
+  $('#dayTitle').textContent = capitalize(parseKey(key).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }));
+  resetEntryForm();
+  renderDayEntries();
+  $('#dayDialog').showModal();
 }
 
-function saveDayEditor(key) {
-  // Plan: si coincide con la rutina semanal no se guarda nada (así los cambios de rutina le siguen afectando)
-  const ids = [...document.querySelectorAll('#dayPlan input:checked')].map((c) => c.value);
-  const weeklyId = routine.days[parseKey(key).getDay()];
-  const weeklyIds = routine.workouts[weeklyId]?.kind === 'rest' ? [] : [weeklyId];
-  calPlan = { ...calPlan };
-  if (ids.length === weeklyIds.length && ids.every((id) => weeklyIds.includes(id))) delete calPlan[key];
-  else calPlan[key] = ids;
-  store.set('calPlan', calPlan);
-
-  if (key <= TODAY) {
-    const done = [...document.querySelectorAll('#dayDone input:checked')].map((c) => c.value);
-    const note = $('#dayNote').value.trim();
-    dayLog = { ...dayLog };
-    if (done.length || note) dayLog[key] = { done, note }; else delete dayLog[key];
-    store.set('dayLog', dayLog);
-
-    gymLog = { ...gymLog };
-    if (done.includes('gym')) gymLog[key] = true; else delete gymLog[key];
-    store.set('gymLog', gymLog);
-
-    // Carrera de ese día: se guarda con km y tiempo para el plan de rodillas
-    const km = parseFloat($('#dayRunKm').value);
-    const time = $('#dayRunTime').value.trim();
-    const sec = /^\d{1,3}:\d{2}(:\d{2})?$/.test(time) ? parseTime(time) : 0;
-    const others = (runsManual || []).filter((r) => r.date !== key);
-    if (!done.includes('run')) runsManual = runsManual === null && !others.length ? null : others;
-    else if (km > 0 && sec > 0) runsManual = [...others, { date: key, km, sec }];
-    store.set('runs', runsManual);
+function renderDayEntries() {
+  const key = $('#dayDialog').dataset.date;
+  const entries = entriesOn(key);
+  $('#dayAddTitle').textContent = key > TODAY ? 'Apuntar lo que vas a hacer' : 'Apuntar lo que hiciste';
+  if (!entries.length) {
+    $('#dayEntries').innerHTML = '<li class="muted small">Nada apuntado este día.</li>';
+    return;
   }
-  renderHealth();
+  $('#dayEntries').innerHTML = entries.map((e) => {
+    const t = TYPES[e.type] || TYPES.other;
+    const routine = routines[e.routineId];
+    return `
+      <li class="day-entry ${e.done ? '' : 'is-planned'}" data-entry="${e.id}" style="--c:var(--c-${t.color})">
+        <div class="de-head">
+          <span class="de-dot"></span>
+          <span class="de-title">${esc(entryTitle(e))}</span>
+          <span class="muted small">${esc(entryDetail(e))}</span>
+          ${e.strava ? '<span class="muted small">Strava</span>' : `
+            <label class="de-done"><input type="checkbox" data-entry-done ${e.done ? 'checked' : ''}> Hecho</label>
+            <button class="icon-btn" type="button" data-entry-del aria-label="Borrar">×</button>`}
+        </div>
+        ${routine?.items.length ? `<ul class="checklist de-ex">${routine.items.map((it, i) => `
+          <li><label class="check"><input type="checkbox" data-entry-ex="${i}" ${e.ex?.includes(i) ? 'checked' : ''}>
+            <span>${esc(it.name)}</span><em>${esc(it.sets || '')}</em></label></li>`).join('')}</ul>` : ''}
+        ${e.note ? `<p class="de-note">${esc(e.note)}</p>` : ''}
+      </li>`;
+  }).join('');
+}
+
+function resetEntryForm() {
+  const options = Object.entries(routines).map(([id, r]) => `<option value="${id}" data-type="${r.type}">${esc(r.label)}</option>`).join('');
+  $('#enRoutine').innerHTML = `<option value="">— Sin rutina —</option>${options}`;
+  $('#enRoutine').hidden = !Object.keys(routines).length;
+  ['#enTitle', '#enKm', '#enTime', '#enMin', '#enNote'].forEach((s) => { $(s).value = ''; });
+  updateEntryForm();
+}
+
+function updateEntryForm() {
+  const type = $('#enType').value;
+  $('#enDist').hidden = !(type === 'run' || type === 'bike');
+  $('#enDur').hidden = type === 'run' || type === 'bike';
+  $('#enTime').placeholder = $('#enMode').value === 'pace' ? 'ritmo mm:ss /km' : 'tiempo mm:ss';
+}
+
+function addEntryFromForm() {
+  const key = $('#dayDialog').dataset.date;
+  const type = $('#enType').value;
+  const entry = { id: uid(), type, title: $('#enTitle').value.trim(), done: key <= TODAY };
+  const routineId = $('#enRoutine').value;
+  if (routineId) entry.routineId = routineId;
+  if (type === 'run' || type === 'bike') {
+    const km = parseFloat(String($('#enKm').value).replace(',', '.'));
+    const clock = parseClock($('#enTime').value);
+    if (km > 0) entry.km = Math.round(km * 100) / 100;
+    if (clock) entry.sec = $('#enMode').value === 'pace' && km > 0 ? Math.round(clock * km) : clock;
+    if ($('#enTime').value && !clock) { $('#enTime').focus(); return; }
+  } else {
+    const min = Number($('#enMin').value);
+    if (min > 0) entry.min = min;
+  }
+  const note = $('#enNote').value.trim();
+  if (note) entry.note = note;
+  trainLog = { ...trainLog, [key]: [...(trainLog[key] || []), entry] };
+  saveTrainLog();
+  resetEntryForm();
+  renderDayEntries();
+  refreshTraining();
+}
+
+function updateEntry(key, id, change) {
+  trainLog = { ...trainLog, [key]: (trainLog[key] || []).map((e) => (e.id === id ? change(e) : e)).filter(Boolean) };
+  if (!trainLog[key].length) delete trainLog[key];
+  saveTrainLog();
+  renderDayEntries();
+  refreshTraining();
+}
+
+function refreshTraining() {
+  renderRunning();
+  renderKnee();
+  renderCalendar();
   renderBriefing();
 }
-
-const fmtDuration = (sec) => `${Math.floor(sec / 3600) ? `${Math.floor(sec / 3600)} h ` : ''}${Math.round((sec % 3600) / 60)} min`;
 
 /* ---------------------------------------------------------
    RENDER · Nutrición
@@ -591,7 +764,6 @@ function renderNutrition() {
         <div class="muted small"><span>${label}</span><span>${Math.round(v)}${goal ? ` / ${goal}` : ''} g</span></div>
         <div class="bar" style="--c:var(--c-${cls})"><span style="--p:${goal ? clamp((v / goal) * 100, 0, 100) : 0}%"></span></div>
       </div>`;
-    // Reparto orientativo del resto: 30% grasa, el resto hidratos
     const fatGoal = Math.round((t.kcal * 0.3) / 9);
     const carbGoal = Math.max(0, Math.round((t.kcal - t.protein * 4 - fatGoal * 9) / 4));
     $('#nutriSummary').innerHTML = `
@@ -604,11 +776,12 @@ function renderNutrition() {
       ${macro('Grasas', total.f, fatGoal, 'personal')}
       <p class="muted small calc-note">Gasto estimado ${t.tdee} kcal (metabolismo basal ${t.bmr} × actividad) − déficit ${t.deficit}.
         <button class="link-btn" type="button" data-open-profile>Cambiar mis datos</button></p>
-      ${t.belowBmr ? '<p class="small bad-text">Tu objetivo queda por debajo de tu metabolismo basal: es un déficit muy agresivo, sobre todo entrenando tanto. Coméntalo con un profesional.</p>' : ''}`;
+      ${t.belowBmr ? '<p class="small bad-text">Tu objetivo queda por debajo de tu metabolismo basal: es un déficit muy agresivo. Coméntalo con un profesional.</p>' : ''}`;
   }
 
   $('#foodDayLabel').textContent = foodOffset === 0 ? 'Hoy' : foodOffset === -1 ? 'Ayer' : parseKey(key).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
   $('[data-food-nav="1"]').disabled = foodOffset >= 0;
+  renderMyFoods();
 
   if (!food.length) {
     $('#foodList').innerHTML = '<p class="muted small">Aún no has apuntado nada este día.</p>';
@@ -623,8 +796,8 @@ function renderNutrition() {
         <div class="meal-head"><span>${meal}</span><span class="muted small">${Math.round(s.kcal)} kcal · ${Math.round(s.p)} g prot.</span></div>
         <ul>
           ${items.map((i) => `
-            <li>
-              <span class="food-name">${esc(i.name)}${i.g ? ` <em>${i.g} g</em>` : ''}</span>
+            <li title="${esc((i.parts || []).map((p) => `${p.n}: ${p.qty} · ${Math.round(p.kcal)} kcal`).join('\n'))}">
+              <span class="food-name">${esc(i.name)}</span>
               <span class="food-kcal">${Math.round(i.kcal)}</span>
               <button class="icon-btn" type="button" data-food-del="${i.id}" aria-label="Quitar">×</button>
             </li>`).join('')}
@@ -633,77 +806,60 @@ function renderNutrition() {
   }).join('');
 }
 
-function renderFoodResults(list, note = '') {
-  $('#foodResults').innerHTML = list.map((f, i) => `
-    <li><button type="button" data-food-pick="${i}">
-      <span>${esc(f.n)}${f.brand ? ` <em>${esc(f.brand)}</em>` : ''}</span>
-      <span class="muted small">${Math.round(f.kcal)} kcal · ${round1(f.p)} g P /100 g</span>
-    </button></li>`).join('') + (note ? `<li class="muted small">${esc(note)}</li>` : '');
-  $('#foodResults')._items = list;
+function renderMyFoods() {
+  $('#myFoods').innerHTML = myFoods.length
+    ? myFoods.map((m) => `
+        <span class="chip">
+          <button type="button" data-myfood-add="${m.id}" title="Añadir 1 ración">${esc(m.n)} <em>${Math.round(m.kcal)} kcal</em></button>
+          <button type="button" class="chip-x" data-myfood-del="${m.id}" aria-label="Borrar de mis comidas">×</button>
+        </span>`).join('')
+    : '<span class="muted small">Cuando guardes comidas aparecerán aquí para añadirlas con un toque.</span>';
 }
 
-function renderSelectedFood() {
-  const box = $('#foodSelected');
-  if (!selectedFood) { box.hidden = true; return; }
-  const f = selectedFood;
+function renderEstimate() {
+  const box = $('#foodEstimate');
+  if (!estimate) { box.hidden = true; return; }
   box.hidden = false;
+  const total = sumFood(estimate.parts.map(partNutrients));
   box.innerHTML = `
-    <div class="sel-head"><b>${esc(f.n)}</b><button class="icon-btn" type="button" data-food-clear aria-label="Quitar selección">×</button></div>
-    <p class="muted small">Por 100 g: ${Math.round(f.kcal)} kcal · ${round1(f.p)} g proteína · ${round1(f.c)} g hidratos · ${round1(f.f)} g grasa</p>
-    <div class="sel-row">
-      <input type="number" id="foodGrams" min="1" step="1" value="${f.u?.g || 100}" aria-label="Gramos"> <span class="muted small">g</span>
-      ${f.u ? `<button class="btn btn-sm btn-ghost" type="button" data-food-unit="${f.u.g}">${esc(f.u.label)} (${f.u.g} g)</button>` : ''}
-      <button class="btn btn-primary btn-sm" type="submit">Añadir</button>
-    </div>
-    <p class="muted small" id="foodPreview"></p>`;
-  updateFoodPreview();
-}
-
-function updateFoodPreview() {
-  const g = Number($('#foodGrams')?.value) || 0;
-  if (!selectedFood || !$('#foodPreview')) return;
-  $('#foodPreview').textContent = `= ${Math.round((selectedFood.kcal * g) / 100)} kcal · ${round1((selectedFood.p * g) / 100)} g proteína`;
+    ${estimate.parts.length ? `
+    <table class="est-table">
+      ${estimate.parts.map((p, i) => `
+        <tr>
+          <td>${esc(p.food.n)}${p.auto ? ' <em>(añadido)</em>' : ''}</td>
+          <td class="est-qty"><input type="number" min="0" step="${p.food.mine ? '0.5' : '5'}" value="${round1(p.amount)}" data-est-qty="${i}" aria-label="Cantidad"> ${p.food.mine ? 'ración' : 'g'}</td>
+          <td class="est-kcal">${Math.round(partNutrients(p).kcal)}</td>
+          <td><button class="icon-btn" type="button" data-est-del="${i}" aria-label="Quitar">×</button></td>
+        </tr>`).join('')}
+      <tr class="est-total"><td>Total</td><td></td><td class="est-kcal">${Math.round(total.kcal)} kcal</td><td></td></tr>
+    </table>
+    <p class="muted small">${Math.round(total.p)} g proteína · ${Math.round(total.c)} g hidratos · ${Math.round(total.f)} g grasa · estimación casera, ajusta los gramos si hace falta.</p>`
+    : '<p class="muted small">No he reconocido ningún alimento. Prueba con otras palabras o añádelo a mano.</p>'}
+    ${estimate.unknown.length ? `<p class="small warn-text">No he reconocido: ${esc(estimate.unknown.join(', '))}. Añádelo a mano si cuenta.</p>` : ''}
+    <div class="est-actions">
+      <input type="text" id="estName" value="${esc(estimate.text)}" maxlength="80" aria-label="Nombre">
+      <label class="check"><input type="checkbox" id="estSave"><span>Guardar en mis comidas</span></label>
+      <button class="btn btn-primary btn-sm" type="button" id="estAdd" ${estimate.parts.length ? '' : 'disabled'}>Añadir</button>
+    </div>`;
 }
 
 /* ---------------------------------------------------------
-   EDITOR DE RUTINA
+   EDITOR DE RUTINAS
    --------------------------------------------------------- */
-function renderRoutineEditor(r = routine) {
-  const options = (sel) => Object.entries(r.workouts)
-    .map(([id, w]) => `<option value="${id}" ${id === sel ? 'selected' : ''}>${esc(w.label)}</option>`).join('');
-  $('#routineDays').innerHTML = [1, 2, 3, 4, 5, 6, 0].map((d) => `
-    <label class="week-row"><span>${WEEKDAYS[d]}</span><select data-day="${d}">${options(r.days[d])}</select></label>`).join('');
-  $('#routineWorkouts').innerHTML = Object.entries(r.workouts).map(([id, w]) => `
-    <fieldset class="workout-edit" data-wid="${id}">
-      <div class="we-row">
-        <input type="text" class="we-label" value="${esc(w.label)}" maxlength="40" aria-label="Nombre del entrenamiento" required>
-        <select class="we-kind" aria-label="Tipo">${Object.entries(KINDS).map(([k, l]) => `<option value="${k}" ${k === w.kind ? 'selected' : ''}>${l}</option>`).join('')}</select>
-        <button class="icon-btn" type="button" data-del-workout="${id}" aria-label="Eliminar entrenamiento">×</button>
-      </div>
-      <textarea class="we-items" rows="${Math.max(2, w.items.length)}" placeholder="Un ejercicio por línea: Press banca | 4×8" ${w.kind === 'gym' ? '' : 'hidden'}>${esc(w.items.map((i) => `${i.name} | ${i.sets}`).join('\n'))}</textarea>
-    </fieldset>`).join('');
-}
-
-function readRoutineEditor() {
-  const workouts = {};
-  document.querySelectorAll('#routineWorkouts .workout-edit').forEach((fs) => {
-    const kind = fs.querySelector('.we-kind').value;
-    workouts[fs.dataset.wid] = {
-      label: fs.querySelector('.we-label').value.trim() || 'Entrenamiento',
-      kind,
-      items: kind !== 'gym' ? [] : fs.querySelector('.we-items').value.split('\n').map((l) => l.trim()).filter(Boolean)
-        .map((l) => { const [name, sets = ''] = l.split('|').map((s) => s.trim()); return { name, sets }; }),
-    };
-  });
-  if (!Object.keys(workouts).length) workouts.rest = { label: 'Descanso', kind: 'rest', items: [] };
-  const fallback = Object.keys(workouts).find((k) => workouts[k].kind === 'rest') || Object.keys(workouts)[0];
-  const days = {};
-  document.querySelectorAll('#routineDays select').forEach((s) => { days[s.dataset.day] = workouts[s.value] ? s.value : fallback; });
-  return { days, workouts };
+function openRoutineEditor(id = null) {
+  const r = id ? routines[id] : { label: '', type: 'gym', items: [] };
+  const f = $('#routineForm');
+  f.dataset.id = id || '';
+  f.elements.label.value = r.label;
+  f.elements.type.value = r.type;
+  f.elements.items.value = r.items.map((i) => (i.sets ? `${i.name} | ${i.sets}` : i.name)).join('\n');
+  $('#routineTitle').textContent = id ? 'Editar rutina' : 'Nueva rutina';
+  $('#routineDelete').hidden = !id;
+  $('#routineDialog').showModal();
 }
 
 /* ---------------------------------------------------------
-   STRAVA (a través de tu puente de Google Apps Script)
+   STRAVA (opcional, a través de tu puente de Google Apps Script)
    --------------------------------------------------------- */
 async function loadStrava(force = false) {
   if (!stravaCfg?.url || !stravaCfg?.key) return;
@@ -711,19 +867,18 @@ async function loadStrava(force = false) {
   if (!force && cached && Date.now() - cached.at < 10 * 60 * 1000) return;
   try {
     const after = Math.floor(startOfDay(addDays(-HEALTH.stravaDays)).getTime() / 1000);
-    // text/plain evita la petición previa de CORS; la clave va en el cuerpo, no en la URL
     const res = await fetch(stravaCfg.url, {
       method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ key: stravaCfg.key, after }),
     });
     const data = await res.json();
-    if (data.error) throw new Error(data.error === 'unauthorized' ? 'clave incorrecta' : data.error === 'not_connected' ? 'falta autorizar Strava en el puente' : data.error);
+    if (data.error) throw new Error(data.error);
     activities = (data.activities || []).filter((a) => a.start);
     cache.set('strava', { at: Date.now(), list: activities });
     stravaSyncedAt = new Date();
     stravaError = null;
   } catch (e) {
-    stravaError = e.message === 'Failed to fetch' ? 'no se pudo conectar con el puente' : e.message;
+    stravaError = e.message;
   }
   renderHealth();
   renderBriefing();
@@ -733,9 +888,7 @@ async function loadStrava(force = false) {
    RENDER GLOBAL Y EVENTOS
    --------------------------------------------------------- */
 function renderHealth() {
-  const start = mondayOf();
-  $('#weekLabel').textContent = `Semana del ${start.getDate()}/${start.getMonth() + 1}`;
-  renderStrength();
+  renderRoutines();
   renderRunning();
   renderKnee();
   renderCalendar();
@@ -743,27 +896,66 @@ function renderHealth() {
 }
 
 function bindHealth() {
-  // Rutina de fuerza: marcar un ejercicio también apunta que hoy fuiste al gimnasio
-  $('#strength').addEventListener('change', (e) => {
-    const id = e.target.closest('[data-routine]').dataset.routine;
-    const i = Number(e.target.dataset.i);
-    const list = strengthDone[id] || (strengthDone[id] = []);
-    e.target.checked ? list.push(i) : list.splice(list.indexOf(i), 1);
-    store.set(`strength:${WEEK}`, strengthDone);
-    if (e.target.checked && !gymLog[TODAY]) { gymLog[TODAY] = true; store.set('gymLog', gymLog); }
-    renderStrength();
+  // Rutinas
+  $('#newRoutine').addEventListener('click', () => openRoutineEditor());
+  $('#routinesList').addEventListener('click', (e) => {
+    const edit = e.target.closest('[data-routine-edit]');
+    if (edit) { openRoutineEditor(edit.dataset.routineEdit); return; }
+    const today = e.target.closest('[data-routine-today]');
+    if (today) {
+      const r = routines[today.dataset.routineToday];
+      trainLog = { ...trainLog, [TODAY]: [...(trainLog[TODAY] || []), { id: uid(), type: r.type, routineId: today.dataset.routineToday, title: '', done: true }] };
+      saveTrainLog();
+      refreshTraining();
+      openDay(TODAY);
+    }
+  });
+  $('#routineForm').addEventListener('submit', (e) => {
+    if (e.submitter?.value !== 'save') return;
+    const f = e.target.elements;
+    const id = e.target.dataset.id || `r${uid()}`;
+    routines = {
+      ...routines,
+      [id]: {
+        label: f.label.value.trim() || 'Rutina',
+        type: f.type.value,
+        items: f.items.value.split('\n').map((l) => l.trim()).filter(Boolean)
+          .map((l) => { const [name, sets = ''] = l.split('|').map((s) => s.trim()); return { name, sets }; }),
+      },
+    };
+    saveRoutines();
+    renderRoutines();
     renderCalendar();
   });
+  $('#routineDelete').addEventListener('click', () => {
+    const id = $('#routineForm').dataset.id;
+    if (!id || !confirm(`¿Borrar la rutina «${routines[id].label}»? Los entrenos ya apuntados se mantienen.`)) return;
+    const { [id]: removed, ...rest } = routines;
+    routines = rest;
+    // Los entrenos apuntados con esa rutina guardan su nombre
+    Object.values(trainLog).forEach((list) => list.forEach((en) => {
+      if (en.routineId === id) { en.title = en.title || removed.label; delete en.routineId; }
+    }));
+    saveRoutines();
+    saveTrainLog();
+    $('#routineDialog').close();
+    renderHealth();
+  });
 
+  // Running: apuntar una carrera de hoy
+  $('#runMode').addEventListener('change', () => {
+    $('#runTime').placeholder = $('#runMode').value === 'pace' ? 'ritmo mm:ss /km' : 'tiempo mm:ss';
+  });
   $('#runForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    const km = parseFloat($('#runKm').value);
-    const sec = parseTime($('#runTime').value);
-    if (!km || !sec) return;
-    runsManual = [...(runsManual || []), { date: TODAY, km, sec }];
-    store.set('runs', runsManual);
+    const km = parseFloat(String($('#runKm').value).replace(',', '.'));
+    const clock = parseClock($('#runTime').value);
+    if (!(km > 0) || !clock) { (!(km > 0) ? $('#runKm') : $('#runTime')).focus(); return; }
+    const sec = $('#runMode').value === 'pace' ? Math.round(clock * km) : clock;
+    trainLog = { ...trainLog, [TODAY]: [...(trainLog[TODAY] || []), { id: uid(), type: 'run', title: '', km, sec, done: true }] };
+    saveTrainLog();
     e.target.reset();
-    renderHealth();
+    refreshTraining();
   });
 
   // Rodillas
@@ -803,61 +995,39 @@ function bindHealth() {
     renderKnee();
   });
 
-  // Calendario: tocar un día abre su ficha (qué vas a hacer y qué hiciste)
+  // Calendario y ficha del día
   $('#calendar').addEventListener('click', (e) => {
     const day = e.target.closest('.cal-day');
-    if (day) openDayEditor(day.dataset.date);
-  });
-  $('#dayPlan').addEventListener('click', (e) => {
-    if (!e.target.closest('[data-day-reset]')) return;
-    const key = $('#dayDialog').dataset.date;
-    const weekly = new Set([routine.days[parseKey(key).getDay()]]);
-    document.querySelectorAll('#dayPlan input[type="checkbox"]').forEach((c) => { c.checked = weekly.has(c.value); });
-  });
-  $('#dayDone').addEventListener('change', (e) => {
-    if (e.target.value === 'run') $('#dayRun').hidden = !e.target.checked;
-  });
-  $('#dayForm').addEventListener('submit', (e) => {
-    if (e.submitter?.value !== 'save') return;
-    saveDayEditor($('#dayDialog').dataset.date);
+    if (day) openDay(day.dataset.date);
   });
   document.querySelectorAll('[data-cal-nav]').forEach((b) => b.addEventListener('click', () => {
     calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + Number(b.dataset.calNav), 1);
     renderCalendar();
   }));
-
-  // Editor de rutina
-  const routineDialog = $('#routineDialog');
-  let draft = null;
-  $('#editRoutine').addEventListener('click', () => {
-    draft = JSON.parse(JSON.stringify(routine));
-    renderRoutineEditor(draft);
-    routineDialog.showModal();
+  $('#enType').addEventListener('change', updateEntryForm);
+  $('#enMode').addEventListener('change', updateEntryForm);
+  $('#enRoutine').addEventListener('change', () => {
+    const opt = $('#enRoutine').selectedOptions[0];
+    if (opt?.dataset.type) { $('#enType').value = opt.dataset.type; updateEntryForm(); }
   });
-  $('#routineWorkouts').addEventListener('change', (e) => {
-    if (e.target.classList.contains('we-kind')) {
-      e.target.closest('.workout-edit').querySelector('.we-items').hidden = e.target.value !== 'gym';
+  $('#enAdd').addEventListener('click', addEntryFromForm);
+  $('#dayEntries').addEventListener('change', (e) => {
+    const li = e.target.closest('[data-entry]');
+    if (!li) return;
+    const key = $('#dayDialog').dataset.date;
+    if (e.target.matches('[data-entry-done]')) updateEntry(key, li.dataset.entry, (en) => ({ ...en, done: e.target.checked }));
+    if (e.target.matches('[data-entry-ex]')) {
+      const i = Number(e.target.dataset.entryEx);
+      updateEntry(key, li.dataset.entry, (en) => {
+        const ex = new Set(en.ex || []);
+        e.target.checked ? ex.add(i) : ex.delete(i);
+        return { ...en, ex: [...ex] };
+      });
     }
   });
-  $('#routineWorkouts').addEventListener('click', (e) => {
-    const del = e.target.closest('[data-del-workout]');
-    if (!del) return;
-    draft = readRoutineEditor();
-    delete draft.workouts[del.dataset.delWorkout];
-    renderRoutineEditor(readRoutineFromDraft(draft));
-  });
-  $('#addWorkout').addEventListener('click', () => {
-    draft = readRoutineEditor();
-    draft.workouts[`w${uid()}`] = { label: 'Nuevo entrenamiento', kind: 'gym', items: [] };
-    renderRoutineEditor(draft);
-  });
-  $('#saveRoutine').addEventListener('click', (e) => {
-    e.preventDefault();
-    routine = readRoutineEditor();
-    store.set('routine', routine);
-    routineDialog.close();
-    renderHealth();
-    renderBriefing();
+  $('#dayEntries').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-entry-del]')) return;
+    updateEntry($('#dayDialog').dataset.date, e.target.closest('[data-entry]').dataset.entry, () => null);
   });
 
   // Perfil (peso, altura…)
@@ -883,50 +1053,7 @@ function bindHealth() {
     renderBriefing();
   });
 
-  // Comidas: búsqueda en la lista local mientras escribes
-  $('#foodSearch').addEventListener('input', (e) => {
-    const q = e.target.value.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    if (q.length < 2) { renderFoodResults([]); return; }
-    const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    renderFoodResults(FOOD_DB.filter((f) => norm(f.n).includes(q)).slice(0, 8));
-  });
-  $('#foodOff').addEventListener('click', async () => {
-    const q = $('#foodSearch').value.trim();
-    if (q.length < 2) { $('#foodSearch').focus(); return; }
-    renderFoodResults([], 'Buscando en Open Food Facts…');
-    try {
-      const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=10&fields=product_name,brands,nutriments`;
-      const data = await (await fetch(url)).json();
-      const list = (data.products || [])
-        .filter((p) => p.product_name && p.nutriments?.['energy-kcal_100g'] != null)
-        .map((p) => ({
-          n: p.product_name, brand: (p.brands || '').split(',')[0],
-          kcal: p.nutriments['energy-kcal_100g'], p: p.nutriments.proteins_100g || 0,
-          c: p.nutriments.carbohydrates_100g || 0, f: p.nutriments.fat_100g || 0,
-        }));
-      renderFoodResults(list, list.length ? '' : 'Sin resultados. Prueba otro nombre o añádelo a mano.');
-    } catch {
-      renderFoodResults([], 'No se pudo conectar con Open Food Facts.');
-    }
-  });
-  $('#foodResults').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-food-pick]');
-    if (!b) return;
-    selectedFood = $('#foodResults')._items[Number(b.dataset.foodPick)];
-    renderFoodResults([]);
-    renderSelectedFood();
-    $('#foodGrams')?.focus();
-  });
-  $('#foodSelected').addEventListener('input', updateFoodPreview);
-  $('#foodSelected').addEventListener('click', (e) => {
-    if (e.target.closest('[data-food-clear]')) { selectedFood = null; renderSelectedFood(); }
-    const unit = e.target.closest('[data-food-unit]');
-    if (unit) {
-      const g = $('#foodGrams');
-      g.value = (Number(g.value) === Number(unit.dataset.foodUnit) ? 0 : Number(g.value) || 0) + Number(unit.dataset.foodUnit);
-      updateFoodPreview();
-    }
-  });
+  // Comidas: escribe lo que has comido y calcula
   const addFood = (item) => {
     food = [...food, { id: uid(), meal: $('#foodMeal').value, ...item }];
     store.set(`food:${foodDay()}`, food);
@@ -935,21 +1062,68 @@ function bindHealth() {
   };
   $('#foodForm').addEventListener('submit', (e) => {
     e.preventDefault();
-    if (!selectedFood) return;
-    const g = Number($('#foodGrams').value);
-    if (!g) return;
-    const s = selectedFood;
-    addFood({ name: s.n, g, kcal: (s.kcal * g) / 100, p: round1((s.p * g) / 100), c: round1((s.c * g) / 100), f: round1((s.f * g) / 100) });
-    selectedFood = null;
-    $('#foodSearch').value = '';
-    renderSelectedFood();
+    const text = $('#foodText').value.trim();
+    if (!text) { $('#foodText').focus(); return; }
+    estimate = estimateFood(text);
+    renderEstimate();
+  });
+  $('#foodText').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#foodForm').requestSubmit(); }
+  });
+  $('#foodEstimate').addEventListener('input', (e) => {
+    const i = e.target.dataset.estQty;
+    if (i == null) return;
+    estimate.parts[Number(i)].amount = Number(e.target.value) || 0;
+    const kcalCell = e.target.closest('tr').querySelector('.est-kcal');
+    kcalCell.textContent = Math.round(partNutrients(estimate.parts[Number(i)]).kcal);
+    const total = sumFood(estimate.parts.map(partNutrients));
+    $('#foodEstimate .est-total .est-kcal').textContent = `${Math.round(total.kcal)} kcal`;
+  });
+  $('#foodEstimate').addEventListener('click', (e) => {
+    const del = e.target.closest('[data-est-del]');
+    if (del) { estimate.parts.splice(Number(del.dataset.estDel), 1); renderEstimate(); return; }
+    if (!e.target.closest('#estAdd')) return;
+    const s = sumFood(estimate.parts.map(partNutrients));
+    const name = $('#estName').value.trim() || estimate.text;
+    const item = {
+      name, kcal: s.kcal, p: round1(s.p), c: round1(s.c), f: round1(s.f),
+      parts: estimate.parts.map((p) => ({ n: p.food.n, qty: p.food.mine ? `${round1(p.amount)} ración` : `${Math.round(p.amount)} g`, kcal: partNutrients(p).kcal })),
+    };
+    if ($('#estSave').checked) {
+      myFoods = [...myFoods.filter((m) => norm(m.n) !== norm(name)), { id: uid(), n: name, kcal: s.kcal, p: round1(s.p), c: round1(s.c), f: round1(s.f) }];
+      store.set('myFoods', myFoods);
+    }
+    addFood(item);
+    estimate = null;
+    $('#foodText').value = '';
+    renderEstimate();
   });
   $('#manualFood').addEventListener('click', () => {
     const name = $('#mfName').value.trim();
     const kcal = Number($('#mfKcal').value);
-    if (!name || !kcal) return;
-    addFood({ name, g: null, kcal, p: Number($('#mfProt').value) || 0, c: 0, f: 0 });
+    if (!name || !(kcal >= 0) || $('#mfKcal').value === '') { (!name ? $('#mfName') : $('#mfKcal')).focus(); return; }
+    const item = { name, kcal, p: Number($('#mfProt').value) || 0, c: 0, f: 0 };
+    if ($('#mfSave').checked) {
+      myFoods = [...myFoods.filter((m) => norm(m.n) !== norm(name)), { id: uid(), n: name, kcal, p: item.p, c: 0, f: 0 }];
+      store.set('myFoods', myFoods);
+    }
+    addFood(item);
     ['#mfName', '#mfKcal', '#mfProt'].forEach((s) => { $(s).value = ''; });
+    $('#mfSave').checked = false;
+  });
+  $('#myFoods').addEventListener('click', (e) => {
+    const add = e.target.closest('[data-myfood-add]');
+    if (add) {
+      const m = myFoods.find((x) => x.id === add.dataset.myfoodAdd);
+      if (m) addFood({ name: m.n, kcal: m.kcal, p: m.p, c: m.c, f: m.f });
+      return;
+    }
+    const del = e.target.closest('[data-myfood-del]');
+    if (del) {
+      myFoods = myFoods.filter((x) => x.id !== del.dataset.myfoodDel);
+      store.set('myFoods', myFoods);
+      renderMyFoods();
+    }
   });
   $('#foodList').addEventListener('click', (e) => {
     const del = e.target.closest('[data-food-del]');
@@ -964,26 +1138,16 @@ function bindHealth() {
     food = store.get(`food:${foodDay()}`, []);
     renderNutrition();
   }));
-  // Elegir la comida según la hora
   const h = new Date().getHours();
   $('#foodMeal').value = h < 11 ? 'Desayuno' : h < 16 ? 'Comida' : h < 19 ? 'Merienda' : 'Cena';
 
-  // Strava
-  const stravaDialog = $('#stravaDialog');
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('[data-strava="open"]')) return;
-    $('#stravaUrl').value = stravaCfg?.url || '';
-    $('#stravaKey').value = stravaCfg?.key || '';
-    $('#stravaStatus').textContent = stravaError ? `Último error: ${stravaError}` : stravaSyncedAt ? `Conectado · ${fmtHour(stravaSyncedAt)}` : '';
-    stravaDialog.showModal();
-  });
+  // Strava (solo si algún día configuras el puente)
   $('#stravaForm').addEventListener('submit', (e) => {
     if (e.submitter?.value !== 'save') return;
     const url = $('#stravaUrl').value.trim();
     const key = $('#stravaKey').value.trim();
     stravaCfg = url && key ? { url, key } : null;
     store.set('strava', stravaCfg);
-    stravaError = null;
     if (!stravaCfg) { activities = []; cache.set('strava', null); }
     renderHealth();
     loadStrava(true);
@@ -992,11 +1156,4 @@ function bindHealth() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') loadStrava(false);
   });
-}
-
-// El editor borra un entrenamiento: los días que lo usaban pasan a descanso
-function readRoutineFromDraft(d) {
-  const fallback = Object.keys(d.workouts).find((k) => d.workouts[k].kind === 'rest') || Object.keys(d.workouts)[0];
-  Object.keys(d.days).forEach((day) => { if (!d.workouts[d.days[day]]) d.days[day] = fallback; });
-  return d;
 }
