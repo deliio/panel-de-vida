@@ -57,5 +57,5 @@ Strava obliga a guardar una clave secreta que no puede ir en una web pública, a
 La clave del panel se guarda en tu Drive privado (sincronizada entre dispositivos), nunca en este repositorio.
 
 ## Personalizar
-Edita `CONFIG` al principio de `app.js` (nombre, fechas del viaje, enlace de Finanzas) . Tus rutinas, entrenos, comidas y datos de calorías se gestionan desde el propio panel; la tabla de alimentos caseros está en `FOODS` (`health.js`).
+Edita `CONFIG` al principio de `app.js` (nombre, fechas del viaje, enlace de Finanzas). Tus rutinas, entrenos, comidas y datos de calorías se gestionan desde el propio panel; la tabla de alimentos caseros está en `FOODS` (`health.js`).
 Busca `🔌 API` para ver dónde se conectan los servicios externos.
