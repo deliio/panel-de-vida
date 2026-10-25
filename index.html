@@ -176,6 +176,7 @@
         <div class="card-head">
           <h2>Calendario de entrenos</h2>
           <div class="head-actions day-nav">
+            <button class="btn btn-sm btn-ghost" id="fillCalendar" type="button" hidden>Rellenar con mis rutinas</button>
             <button class="icon-btn" data-cal-nav="-1" type="button" aria-label="Mes anterior">‹</button>
             <span id="calTitle"></span>
             <button class="icon-btn" data-cal-nav="1" type="button" aria-label="Mes siguiente">›</button>
@@ -306,6 +307,19 @@
       </label>
       <label class="span-all">Ejercicios (opcional, uno por línea)
         <textarea name="items" rows="6" placeholder="Press banca | 4×8&#10;Dominadas | 3×10&#10;Plancha | 3×45 s"></textarea>
+      </label>
+      <fieldset class="span-all day-pick">
+        <legend>Qué días la haces (para rellenar el calendario)</legend>
+        <label><input type="checkbox" name="days" value="1"><span>L</span></label>
+        <label><input type="checkbox" name="days" value="2"><span>M</span></label>
+        <label><input type="checkbox" name="days" value="3"><span>X</span></label>
+        <label><input type="checkbox" name="days" value="4"><span>J</span></label>
+        <label><input type="checkbox" name="days" value="5"><span>V</span></label>
+        <label><input type="checkbox" name="days" value="6"><span>S</span></label>
+        <label><input type="checkbox" name="days" value="0"><span>D</span></label>
+      </fieldset>
+      <label class="span-all">Notas (opcional)
+        <textarea name="note" rows="2" maxlength="500" placeholder="p. ej. Dejar 1–2 reps en recámara"></textarea>
       </label>
     </div>
     <div class="dialog-foot">

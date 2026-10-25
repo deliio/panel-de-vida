@@ -490,19 +490,100 @@ function renderRoutines() {
   }
   $('#routinesList').innerHTML = list.map(([id, r]) => {
     const t = TYPES[r.type] || TYPES.other;
+    const days = routineDays(r);
     return `
-      <div class="routine" data-routine="${id}">
-        <div class="routine-head">
+      <details class="routine" data-routine="${id}">
+        <summary class="routine-head">
           <span>${esc(r.label)}</span>
           <span class="tag" style="--c:var(--c-${t.color})">${t.label}</span>
+          ${days ? `<span class="muted small">${days}</span>` : ''}
           <span class="routine-actions">
             <button class="btn btn-sm btn-ghost" type="button" data-routine-today="${id}">Hecha hoy</button>
             <button class="icon-btn" type="button" data-routine-edit="${id}" aria-label="Editar rutina">✎</button>
           </span>
-        </div>
+        </summary>
+        ${r.note ? `<p class="routine-note">${esc(r.note)}</p>` : ''}
         ${r.items.length ? `<ul class="routine-items">${r.items.map((i) => `<li><span>${esc(i.name)}</span>${i.sets ? `<em>${esc(i.sets)}</em>` : ''}</li>`).join('')}</ul>` : ''}
-      </div>`;
+      </details>`;
   }).join('');
+}
+
+// "Lun · Jue" con los días que tú le pusiste a la rutina
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const routineDays = (r) => DAY_ORDER.filter((d) => r.days?.includes(d)).map((d) => WEEKDAYS[d].slice(0, 3)).join(' · ');
+
+/* ---------------------------------------------------------
+   RELLENAR EL CALENDARIO con los días de tus rutinas
+   Solo días a partir de hoy y que aún no tengan nada apuntado.
+   --------------------------------------------------------- */
+function fillCalendar(fromKey, untilKey) {
+  let added = 0;
+  const log = { ...trainLog };
+  for (let d = parseKey(fromKey); dateKey(d) <= untilKey; d = addDays(1, d)) {
+    const key = dateKey(d);
+    if (key < TODAY || log[key]?.length) continue;
+    const todays = Object.entries(routines).filter(([, r]) => r.days?.includes(d.getDay()));
+    if (!todays.length) continue;
+    log[key] = todays.map(([id, r]) => ({ id: uid(), type: r.type, routineId: id, title: '', done: false }));
+    added += todays.length;
+  }
+  trainLog = log;
+  if (added) saveTrainLog();
+  return added;
+}
+
+const hasRoutineDays = () => Object.values(routines).some((r) => r.days?.length);
+
+/* ---------------------------------------------------------
+   IMPORTAR una rutina desde un enlace (#importar=…)
+   El contenido va en el fragmento de la URL: nunca llega a ningún servidor.
+   --------------------------------------------------------- */
+function readImportFromUrl() {
+  const m = location.hash.match(/^#importar=([A-Za-z0-9_-]+)$/);
+  if (!m) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+    const data = JSON.parse(json);
+    return Array.isArray(data.routines) ? data : null;
+  } catch {
+    alert('El enlace de importación no es válido.');
+    return null;
+  }
+}
+
+// Se aplica después de traer tus datos de Drive, para no pisar lo de otro dispositivo
+let pendingImport = null;
+function runPendingImport() {
+  if (!pendingImport) return;
+  const data = pendingImport;
+  pendingImport = null;
+  applyImport(data);
+}
+
+function applyImport(data) {
+  const until = data.until || dateKey(addDays(42));
+  const ok = confirm(`¿Importar ${data.routines.length} rutinas${data.routines.some((r) => r.days?.length)
+    ? ` y apuntarlas en el calendario hasta el ${parseKey(until).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}` : ''}?\n\nLos días que ya tengan algo apuntado no se tocan.`);
+  if (!ok) return;
+  const byName = Object.fromEntries(Object.entries(routines).map(([id, r]) => [norm(r.label), id]));
+  routines = { ...routines };
+  data.routines.forEach((r) => {
+    const id = byName[norm(r.label)] || `r${uid()}`; // si ya existe con ese nombre, se actualiza
+    routines[id] = {
+      label: String(r.label).slice(0, 60),
+      type: TYPES[r.type] ? r.type : 'other',
+      items: (r.items || []).map((i) => ({ name: String(i.name || i).slice(0, 120), sets: String(i.sets || '').slice(0, 40) })),
+      days: (r.days || []).filter((d) => d >= 0 && d <= 6),
+      note: r.note ? String(r.note).slice(0, 500) : '',
+    };
+  });
+  saveRoutines();
+  const added = fillCalendar(TODAY, until);
+  renderHealth();
+  renderBriefing();
+  alert(`Listo: ${data.routines.length} rutinas guardadas y ${added} entrenos apuntados en el calendario.`);
 }
 
 /* ---------------------------------------------------------
@@ -639,6 +720,7 @@ function renderCalendar() {
   }
 
   $('#calTitle').textContent = capitalize(calCursor.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }));
+  $('#fillCalendar').hidden = !hasRoutineDays();
   $('#calendar').innerHTML = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => `<span class="cal-wd">${d}</span>`).join('') + cells;
   $('#calStats').innerHTML = `
     <div class="stat" style="--c:var(--c-salud)"><b>${stats.gym}</b><span>Gimnasio</span><i></i></div>
@@ -677,8 +759,10 @@ function renderDayEntries() {
           <span class="muted small">${esc(entryDetail(e))}</span>
           ${e.strava ? '<span class="muted small">Strava</span>' : `
             <label class="de-done"><input type="checkbox" data-entry-done ${e.done ? 'checked' : ''}> Hecho</label>
+            <label class="de-move" title="Mover a otro día">Mover <input type="date" data-entry-move value="${key}" aria-label="Mover a otro día"></label>
             <button class="icon-btn" type="button" data-entry-del aria-label="Borrar">×</button>`}
         </div>
+        ${routine?.note ? `<p class="routine-note">${esc(routine.note)}</p>` : ''}
         ${routine?.items.length ? `<ul class="checklist de-ex">${routine.items.map((it, i) => `
           <li><label class="check"><input type="checkbox" data-entry-ex="${i}" ${e.ex?.includes(i) ? 'checked' : ''}>
             <span>${esc(it.name)}</span><em>${esc(it.sets || '')}</em></label></li>`).join('')}</ul>` : ''}
@@ -853,6 +937,8 @@ function openRoutineEditor(id = null) {
   f.elements.label.value = r.label;
   f.elements.type.value = r.type;
   f.elements.items.value = r.items.map((i) => (i.sets ? `${i.name} | ${i.sets}` : i.name)).join('\n');
+  f.elements.note.value = r.note || '';
+  f.querySelectorAll('[name="days"]').forEach((c) => { c.checked = (r.days || []).includes(Number(c.value)); });
   $('#routineTitle').textContent = id ? 'Editar rutina' : 'Nueva rutina';
   $('#routineDelete').hidden = !id;
   $('#routineDialog').showModal();
@@ -900,9 +986,10 @@ function bindHealth() {
   $('#newRoutine').addEventListener('click', () => openRoutineEditor());
   $('#routinesList').addEventListener('click', (e) => {
     const edit = e.target.closest('[data-routine-edit]');
-    if (edit) { openRoutineEditor(edit.dataset.routineEdit); return; }
+    if (edit) { e.preventDefault(); openRoutineEditor(edit.dataset.routineEdit); return; }
     const today = e.target.closest('[data-routine-today]');
     if (today) {
+      e.preventDefault();
       const r = routines[today.dataset.routineToday];
       trainLog = { ...trainLog, [TODAY]: [...(trainLog[TODAY] || []), { id: uid(), type: r.type, routineId: today.dataset.routineToday, title: '', done: true }] };
       saveTrainLog();
@@ -921,6 +1008,8 @@ function bindHealth() {
         type: f.type.value,
         items: f.items.value.split('\n').map((l) => l.trim()).filter(Boolean)
           .map((l) => { const [name, sets = ''] = l.split('|').map((s) => s.trim()); return { name, sets }; }),
+        days: [...e.target.querySelectorAll('[name="days"]:checked')].map((c) => Number(c.value)),
+        note: f.note.value.trim(),
       },
     };
     saveRoutines();
@@ -1000,6 +1089,13 @@ function bindHealth() {
     const day = e.target.closest('.cal-day');
     if (day) openDay(day.dataset.date);
   });
+  $('#fillCalendar').addEventListener('click', () => {
+    const until = dateKey(addDays(41));
+    if (!confirm(`¿Apuntar tus rutinas en sus días hasta el ${parseKey(until).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}?\n\nLos días que ya tengan algo apuntado no se tocan.`)) return;
+    const added = fillCalendar(TODAY, until);
+    refreshTraining();
+    alert(added ? `${added} entrenos apuntados.` : 'No había días libres que rellenar.');
+  });
   document.querySelectorAll('[data-cal-nav]').forEach((b) => b.addEventListener('click', () => {
     calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + Number(b.dataset.calNav), 1);
     renderCalendar();
@@ -1016,6 +1112,17 @@ function bindHealth() {
     if (!li) return;
     const key = $('#dayDialog').dataset.date;
     if (e.target.matches('[data-entry-done]')) updateEntry(key, li.dataset.entry, (en) => ({ ...en, done: e.target.checked }));
+    if (e.target.matches('[data-entry-move]')) {
+      const to = e.target.value;
+      if (!to || to === key) return;
+      const moving = (trainLog[key] || []).find((en) => en.id === li.dataset.entry);
+      // Si lo mueves al futuro queda pendiente; al pasado, como hecho
+      updateEntry(key, li.dataset.entry, () => null);
+      trainLog = { ...trainLog, [to]: [...(trainLog[to] || []), { ...moving, done: to <= TODAY ? moving.done : false }] };
+      saveTrainLog();
+      refreshTraining();
+      renderDayEntries();
+    }
     if (e.target.matches('[data-entry-ex]')) {
       const i = Number(e.target.dataset.entryEx);
       updateEntry(key, li.dataset.entry, (en) => {

@@ -652,3 +652,29 @@ code { font: 12px var(--mono); background: var(--hover); padding: 1px 5px; borde
 [hidden] { display: none !important; }
 .dialog-wide { overflow-x: hidden; }
 .entry-form .food-row > * { min-width: 0; }
+
+/* ---------- Rutinas con días y notas; mover entrenos ---------- */
+details.routine > summary { list-style: none; cursor: pointer; flex-wrap: wrap; }
+details.routine > summary::-webkit-details-marker { display: none; }
+details.routine > summary::before { content: "▸"; color: var(--muted); font-size: 11px; transition: transform .15s; }
+details.routine[open] > summary::before { transform: rotate(90deg); }
+details.routine:not([open]) { padding-bottom: 6px; }
+.routine-note { font-size: 12.5px; color: var(--muted); margin: 6px 0 4px; white-space: pre-wrap; }
+.de-move { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.de-move input { padding: 2px 4px; font-size: 12px; width: 118px; }
+.de-done { margin-left: auto; }
+.day-pick { border: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.day-pick legend { font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.day-pick label { cursor: pointer; }
+.day-pick input { position: absolute; opacity: 0; pointer-events: none; }
+.day-pick span {
+  display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--border-strong); font: 600 13px var(--mono); color: var(--text-2);
+}
+.day-pick input:checked + span { background: var(--text); color: var(--bg); border-color: var(--text); }
+.day-pick input:focus-visible + span { outline: 2px solid var(--text-2); outline-offset: 2px; }
+.day-pick { min-width: 0; padding: 0; margin: 0; }
+.dialog { overflow-x: hidden; max-height: 92vh; }
+.form-grid > * { min-width: 0; }
+.day-pick label { position: relative; }
+.day-pick input { width: 1px; height: 1px; left: 0; top: 0; margin: 0; }

@@ -813,15 +813,18 @@ function init() {
     if (dateKey() !== TODAY) { loadState(); renderAll(); } // pasó la medianoche con la app abierta
   }, 1000);
 
+  pendingImport = readImportFromUrl(); // health.js · enlace #importar=…
   GoogleSync.init({
     clientId: CONFIG.googleClientId,
     onStatus: renderSyncStatus,
     onEvents: onCalendarEvents,
     onEmails: onGmailMessages,
-    onSynced: seedRoadmapTasks, // tras traer los datos de Drive
+    onSynced: () => { seedRoadmapTasks(); runPendingImport(); }, // tras traer los datos de Drive
     onRemoteData: () => { loadState(); renderAll(); }, // cambios hechos en otro dispositivo
   });
   loadStrava(); // health.js · tus actividades a través del puente de Strava
+  // Sin Google conectado se importa ya; conectado, se espera a la sincronización (con red de seguridad)
+  if (pendingImport) setTimeout(runPendingImport, GoogleSync.isConnected() ? 8000 : 300);
 
   // App instalable (PWA): funciona sin conexión y se puede añadir a la pantalla de inicio
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
