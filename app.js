@@ -36,6 +36,7 @@ const CONFIG = {
     proyecto: { label: 'Proyecto',    color: '#63cfa5' },
     personal: { label: 'Personal',    color: '#e0b46e' },
     urgente:  { label: 'Urgente',     color: '#ee7f8d' },
+    examen:   { label: 'Examen',      color: '#f4a261' },
     salud:    { label: 'Salud',       color: '#b29cf7' },
     viaje:    { label: 'Viaje',       color: '#6ec7dd' },
     finanzas: { label: 'Finanzas',    color: '#d99ac4' },
@@ -251,7 +252,7 @@ const DEFAULT_TASKS = [
 const MOCK_EVENTS = [
   { title: 'Reunión de proyecto (Teams)', date: addDays(1, setTime(10, 0)), place: 'Online', cat: 'proyecto' },
   { title: 'Entrega Práctica 3 · BBDD', date: addDays(2, setTime(23, 59)), place: 'Moovi', cat: 'uni' },
-  { title: 'Parcial de Estadística', date: addDays(3, setTime(9, 30)), place: 'Aula B-204', cat: 'urgente' },
+  { title: 'Parcial de Estadística', date: addDays(3, setTime(9, 30)), place: 'Aula B-204', cat: 'examen', exam: true },
   { title: 'Cena con amigos', date: addDays(6, setTime(21, 0)), place: 'Centro', cat: 'personal' },
   { title: 'Carrera popular 10K', date: addDays(12, setTime(10, 0)), place: 'Salida en el puerto', cat: 'salud' },
   { title: 'Vuelo a Milán', date: CONFIG.milanTrip.start, place: 'Aeropuerto', cat: 'viaje' },
@@ -383,6 +384,7 @@ function renderBriefing() {
   $('#briefingText').innerHTML = `
     <p>Tienes <strong>${pending.length} tarea${pending.length !== 1 ? 's' : ''} pendiente${pending.length !== 1 ? 's' : ''}</strong>${doing ? ` (${doing} en proceso)` : ''}${dueSoon ? ` y <strong>${dueSoon}</strong> vence${dueSoon > 1 ? 'n' : ''} en 2 días o menos` : ''}.</p>
     <p>${agendaText}</p>
+    ${examText()}
     <p>${trainingText}</p>
     <p>${summarizeEmails(unread)}</p>
     ${roadmapText() ? `<p>${roadmapText()}</p>` : ''}
@@ -617,7 +619,45 @@ function bindKanban() {
 /* ---------------------------------------------------------
    4 · AGENDA Y VIAJES
    --------------------------------------------------------- */
+// Línea del briefing con el próximo examen (y cuántos hay en las próximas 2 semanas)
+function examText() {
+  const exams = upcomingExams();
+  if (!exams.length) return '';
+  const next = exams[0];
+  const n = daysUntil(next.date);
+  const when = n === 0 ? '<strong>hoy</strong>' : n === 1 ? '<strong>mañana</strong>' : `en <strong>${n} días</strong>`;
+  const soon = exams.filter((e) => daysUntil(e.date) <= 14).length;
+  return `<p class="exam-line">📝 Próximo examen: <strong>${esc(next.title)}</strong> ${when} (${next.date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}).${soon > 1 ? ` Tienes ${soon} exámenes en las próximas 2 semanas.` : ''}</p>`;
+}
+
+// Exámenes: los del calendario «Exams» de Google
+const upcomingExams = () => events
+  .filter((e) => e.exam && ((e.end || e.date) >= new Date() || daysUntil(e.date) === 0))
+  .sort((a, b) => a.date - b.date);
+
+function renderExams() {
+  const exams = upcomingExams();
+  const box = $('#exams');
+  box.hidden = !exams.length;
+  if (!exams.length) return;
+  const when = (e) => {
+    const n = daysUntil(e.date);
+    return n === 0 ? 'Hoy' : n === 1 ? 'Mañana' : `${n} días`;
+  };
+  box.innerHTML = `
+    <div class="exams-head"><span>📝 Próximos exámenes</span><span class="muted small">${exams.length}</span></div>
+    <ul>
+      ${exams.slice(0, 5).map((e) => `
+        <li class="${daysUntil(e.date) <= 7 ? 'is-soon' : ''}">
+          <span class="exam-days"><b>${when(e)}</b></span>
+          <span class="exam-title">${esc(e.title)}</span>
+          <span class="muted small">${capitalize(e.date.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }))}${e.allDay ? '' : ` · ${fmtHour(e.date)}`}${e.place ? ` · ${esc(e.place)}` : ''}</span>
+        </li>`).join('')}
+    </ul>`;
+}
+
 function renderAgenda() {
+  renderExams();
   const upcoming = events
     .filter((e) => (e.end || e.date) >= new Date() || daysUntil(e.date) === 0)
     .sort((a, b) => a.date - b.date)
@@ -632,7 +672,7 @@ function renderAgenda() {
     return;
   }
   $('#events').innerHTML = upcoming.map((e) => `
-    <li class="event">
+    <li class="event ${e.exam ? 'is-exam' : ''}">
       <div class="event-date">
         <b>${e.date.getDate()}</b>
         <span>${e.date.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}</span>
@@ -647,7 +687,10 @@ function renderAgenda() {
 
 // Llega desde google.js con los eventos reales de tu Google Calendar
 function onCalendarEvents(list) {
-  events = list.map((e) => ({ ...e, cat: categorize(e.title) }));
+  events = list.map((e) => {
+    const exam = /exam/i.test(e.calendar || ''); // tu calendario «Exams»
+    return { ...e, exam, cat: exam ? 'examen' : categorize(e.title) };
+  });
   calendarSyncedAt = new Date();
 
   // Si tienes el viaje en el calendario, la cuenta atrás usa esa fecha

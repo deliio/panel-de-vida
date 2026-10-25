@@ -24,6 +24,7 @@
   --c-proyecto: #63cfa5;
   --c-personal: #e0b46e;
   --c-urgente: #ee7f8d;
+  --c-examen: #f4a261;
   --c-salud: #b29cf7;
   --c-viaje: #6ec7dd;
   --c-finanzas: #d99ac4;
@@ -678,3 +679,20 @@ details.routine:not([open]) { padding-bottom: 6px; }
 .form-grid > * { min-width: 0; }
 .day-pick label { position: relative; }
 .day-pick input { width: 1px; height: 1px; left: 0; top: 0; margin: 0; }
+
+/* ---------- Exámenes (calendario «Exams») ---------- */
+.exams {
+  margin-bottom: 14px; padding: 12px 14px; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--c-examen) 8%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--c-examen) 40%, var(--border));
+}
+.exams-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--c-examen); margin-bottom: 8px; }
+.exams ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.exams li { display: grid; grid-template-columns: 74px minmax(0, 1fr); column-gap: 12px; align-items: baseline; }
+.exams li .muted { grid-column: 2; }
+.exam-days b { font: 600 15px var(--mono); color: var(--text-2); }
+.exams li.is-soon .exam-days b { color: var(--c-examen); }
+.exam-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event.is-exam { background: color-mix(in srgb, var(--c-examen) 7%, transparent); box-shadow: inset 2px 0 0 var(--c-examen); }
+.event.is-exam .event-title { font-weight: 600; }
+.exam-line { padding: 8px 10px; border-radius: var(--radius-sm); border-left: 2px solid var(--c-examen); background: color-mix(in srgb, var(--c-examen) 7%, transparent); color: var(--text-2); }

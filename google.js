@@ -145,10 +145,12 @@ window.GoogleSync = (() => {
   /* ---------- Google Calendar ---------- */
   async function loadCalendar() {
     const timeMin = new Date(); timeMin.setHours(0, 0, 0, 0);
-    const timeMax = new Date(timeMin); timeMax.setDate(timeMax.getDate() + (opts.calendarDays || 90));
+    const timeMax = new Date(timeMin); timeMax.setDate(timeMax.getDate() + (opts.calendarDays || 150));
 
-    const list = await api('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&fields=items(id,selected,primary)');
-    const calendars = (list.items || []).filter((c) => c.selected || c.primary);
+    const list = await api('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&fields=items(id,summary,summaryOverride,selected,primary)');
+    const nameOf = (c) => c.summaryOverride || c.summary || '';
+    // Los visibles en tu Google Calendar, y siempre el de exámenes aunque lo tengas oculto
+    const calendars = (list.items || []).filter((c) => c.selected || c.primary || /exam/i.test(nameOf(c)));
     const params = new URLSearchParams({
       timeMin: timeMin.toISOString(), timeMax: timeMax.toISOString(),
       singleEvents: 'true', orderBy: 'startTime', maxResults: '50',
@@ -156,12 +158,13 @@ window.GoogleSync = (() => {
     });
     const results = await Promise.all(calendars.map((c) =>
       api(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(c.id)}/events?${params}`)
-        .then((r) => r.items || [])
+        .then((r) => (r.items || []).map((e) => ({ ...e, calendar: nameOf(c) })))
         .catch(() => [])));
 
     const events = results.flat()
       .filter((e) => e.status !== 'cancelled')
       .map((e) => ({
+        calendar: e.calendar,
         title: e.summary || '(Sin título)',
         place: e.location || '',
         allDay: !e.start.dateTime,
