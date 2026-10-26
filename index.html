@@ -368,13 +368,27 @@
 <!-- ============ MIS DATOS (calorías) ============ -->
 <dialog class="dialog" id="profileDialog">
   <form method="dialog" id="profileForm">
-    <div class="card-head"><h2>Mis datos</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
+    <div class="card-head"><h2>Mis objetivos</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
     <p class="muted small">Se guardan solo en tu navegador y en tu Drive privado, nunca en GitHub.</p>
+
+    <label class="check fixed-toggle"><input type="checkbox" name="useFixed"><span>Usar mis objetivos fijos</span></label>
+    <fieldset class="form-grid fixed-grid" id="fixedFields">
+      <label class="span-all">Calorías al día<input type="number" name="fxKcal" min="800" max="6000" placeholder="p. ej. 1750"></label>
+      <label>Proteína (g)<input type="number" name="fxP" min="0" max="500"></label>
+      <label>Hidratos (g)<input type="number" name="fxC" min="0" max="900"></label>
+      <label>Grasas (g)<input type="number" name="fxF" min="0" max="400"></label>
+      <label>Agua (L, de…)<input type="number" name="fxWaterMin" min="0" max="10" step="0.1"></label>
+      <label>…a (L)<input type="number" name="fxWaterMax" min="0" max="10" step="0.1"></label>
+      <label>Día de carrera: + kcal<input type="number" name="fxRunKcal" min="0" max="2000"></label>
+      <label>Día de carrera: + hidratos (g)<input type="number" name="fxRunCarbs" min="0" max="500"></label>
+    </fieldset>
+
+    <h3 class="dlg-sub">Para el cálculo automático (si no usas objetivos fijos)</h3>
     <div class="form-grid">
       <label>Sexo<select name="sex"><option value="m">Hombre</option><option value="f">Mujer</option></select></label>
-      <label>Edad<input type="number" name="age" min="14" max="99" required></label>
-      <label>Altura (cm)<input type="number" name="height" min="120" max="230" required></label>
-      <label>Peso (kg)<input type="number" name="weight" min="35" max="250" step="0.1" required></label>
+      <label>Edad<input type="number" name="age" min="14" max="99"></label>
+      <label>Altura (cm)<input type="number" name="height" min="120" max="230"></label>
+      <label>Peso (kg)<input type="number" name="weight" min="35" max="250" step="0.1"></label>
       <label class="span-all">Actividad (con todo lo que entrenas)
         <select name="activity">
           <option value="1.2">Sedentaria · casi no entreno</option>

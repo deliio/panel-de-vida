@@ -355,17 +355,39 @@ const painClass = (v) => (v == null ? '' : v <= 3 ? 'ok' : v <= 6 ? 'warn' : 'ba
 /* ---------------------------------------------------------
    NUTRICIÓN · objetivo (Mifflin-St Jeor) y estimación de comida casera
    --------------------------------------------------------- */
-function nutritionTargets() {
+// ¿Ese día tienes una carrera marcada como hecha?
+const ranOn = (key) => (trainLog[key] || []).some((e) => e.type === 'run' && e.done);
+
+// Objetivo de un día: tus objetivos fijos (con el extra de día de carrera) o el cálculo automático
+function nutritionTargets(key = foodDay()) {
   const p = profile;
+  const fx = p?.fixed;
+  if (fx?.kcal) {
+    const ran = ranOn(key);
+    return {
+      fixed: true, ran,
+      kcal: fx.kcal + (ran ? fx.runKcal || 0 : 0),
+      protein: fx.p, carbs: (fx.c || 0) + (ran ? fx.runCarbs || 0 : 0), fat: fx.f,
+      water: fx.waterMin ? [fx.waterMin, fx.waterMax || fx.waterMin] : null,
+      runKcal: fx.runKcal || 0, runCarbs: fx.runCarbs || 0,
+    };
+  }
   if (!p?.weight || !p?.height || !p?.age) return null;
   const bmr = 10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === 'f' ? -161 : 5);
   const tdee = bmr * (p.activity || 1.55);
   const kcal = Math.round(tdee - (p.deficit ?? 400));
+  const protein = Math.round(p.weight * (p.proteinPerKg || 1.8));
+  const fat = Math.round((kcal * 0.3) / 9); // reparto orientativo: 30% grasa, el resto hidratos
   return {
-    bmr: Math.round(bmr), tdee: Math.round(tdee), deficit: p.deficit ?? 400, kcal,
-    protein: Math.round(p.weight * (p.proteinPerKg || 1.8)), belowBmr: kcal < bmr,
+    bmr: Math.round(bmr), tdee: Math.round(tdee), deficit: p.deficit ?? 400, kcal, protein, fat,
+    carbs: Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4)), belowBmr: kcal < bmr, water: null,
   };
 }
+
+// Agua del día en mililitros
+const waterOn = (key) => store.get(`water:${key}`, 0);
+const fmtL = (ml) => `${(ml / 1000).toLocaleString('es-ES', { maximumFractionDigits: 2 })} L`;
+const fmtRange = (r) => `${r[0].toLocaleString('es-ES')}–${r[1].toLocaleString('es-ES')} L`;
 
 const sumFood = (list) => list.reduce((t, i) => ({
   kcal: t.kcal + i.kcal, p: t.p + i.p, c: t.c + i.c, f: t.f + i.f,
@@ -471,10 +493,11 @@ function healthBriefing() {
   if (planned.length) parts.push(`Para hoy tienes apuntado: ${list(planned)}.`);
   if (done.length) parts.push(`Hoy ya has hecho: ${list(done)}.`);
   if (Object.keys(kneeLog).length && maxPain(kneeLog[TODAY]) == null) parts.push('Aún no has apuntado el dolor de rodillas de hoy.');
-  const t = nutritionTargets();
+  const t = nutritionTargets(TODAY);
   if (t) {
     const s = sumFood(store.get(`food:${TODAY}`, []));
-    parts.push(`Llevas <strong>${Math.round(s.kcal)} de ${t.kcal} kcal</strong> y ${Math.round(s.p)} de ${t.protein} g de proteína.`);
+    const water = t.water ? ` Agua: ${fmtL(waterOn(TODAY))} de ${fmtRange(t.water)}.` : '';
+    parts.push(`Llevas <strong>${Math.round(s.kcal)} de ${t.kcal} kcal</strong>${t.ran && t.runKcal ? ' (día de carrera)' : ''} y ${Math.round(s.p)} de ${t.protein} g de proteína.${water}`);
   }
   return parts.join(' ') || 'Hoy no tienes entrenos apuntados.';
 }
@@ -546,7 +569,7 @@ function readImportFromUrl() {
     const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
     const json = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
     const data = JSON.parse(json);
-    return Array.isArray(data.routines) ? data : null;
+    return (Array.isArray(data.routines) || Array.isArray(data.foods) || data.targets) ? data : null;
   } catch {
     alert('El enlace de importación no es válido.');
     return null;
@@ -564,12 +587,47 @@ function runPendingImport() {
 
 function applyImport(data) {
   const until = data.until || dateKey(addDays(42));
-  const ok = confirm(`¿Importar ${data.routines.length} rutinas${data.routines.some((r) => r.days?.length)
-    ? ` y apuntarlas en el calendario hasta el ${parseKey(until).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}` : ''}?\n\nLos días que ya tengan algo apuntado no se tocan.`);
-  if (!ok) return;
+  const list = data.routines || [];
+  const what = [];
+  if (list.length) {
+    what.push(`${list.length} rutinas${list.some((r) => r.days?.length)
+      ? ` (apuntadas en el calendario hasta el ${parseKey(until).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })})` : ''}`);
+  }
+  if (data.foods?.length) what.push(`${data.foods.length} comidas habituales`);
+  if (data.targets) what.push(`tus objetivos: ${data.targets.kcal} kcal · ${data.targets.p} P · ${data.targets.c} H · ${data.targets.f} G`);
+  if (!confirm(`¿Importar ${joinEs(what)}?\n\nNo se borra nada de lo que ya tienes.`)) return;
+
+  const done = [];
+  if (data.targets) {
+    const t = data.targets;
+    const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+    profile = { ...(profile || {}), fixed: {
+      kcal: num(t.kcal), p: num(t.p), c: num(t.c), f: num(t.f),
+      waterMin: num(t.waterMin), waterMax: num(t.waterMax), runKcal: num(t.runKcal), runCarbs: num(t.runCarbs),
+    } };
+    store.set('profile', profile);
+    done.push('objetivos guardados');
+  }
+  if (data.foods?.length) {
+    const incoming = data.foods.map((m) => ({
+      id: uid(), n: String(m.n).slice(0, 60), group: m.group ? String(m.group).slice(0, 30) : '',
+      desc: m.desc ? String(m.desc).slice(0, 200) : '',
+      kcal: Number(m.kcal) || 0, p: Number(m.p) || 0, c: Number(m.c) || 0, f: Number(m.f) || 0,
+    }));
+    const names = new Set(incoming.map((m) => norm(m.n)));
+    myFoods = [...myFoods.filter((m) => !names.has(norm(m.n))), ...incoming]; // las de mismo nombre se actualizan
+    store.set('myFoods', myFoods);
+    done.push(`${incoming.length} comidas guardadas`);
+  }
+  if (!list.length) {
+    renderHealth();
+    renderBriefing();
+    alert(`Listo: ${joinEs(done)}.`);
+    return;
+  }
   const byName = Object.fromEntries(Object.entries(routines).map(([id, r]) => [norm(r.label), id]));
   routines = { ...routines };
-  data.routines.forEach((r) => {
+  list.forEach((r) => {
     const id = byName[norm(r.label)] || `r${uid()}`; // si ya existe con ese nombre, se actualiza
     routines[id] = {
       label: String(r.label).slice(0, 60),
@@ -583,7 +641,8 @@ function applyImport(data) {
   const added = fillCalendar(TODAY, until);
   renderHealth();
   renderBriefing();
-  alert(`Listo: ${data.routines.length} rutinas guardadas y ${added} entrenos apuntados en el calendario.`);
+  done.unshift(`${list.length} rutinas guardadas y ${added} entrenos apuntados en el calendario`);
+  alert(`Listo: ${joinEs(done)}.`);
 }
 
 /* ---------------------------------------------------------
@@ -823,6 +882,7 @@ function refreshTraining() {
   renderRunning();
   renderKnee();
   renderCalendar();
+  renderNutrition(); // el objetivo de calorías cambia si marcas una carrera
   renderBriefing();
 }
 
@@ -830,16 +890,17 @@ function refreshTraining() {
    RENDER · Nutrición
    --------------------------------------------------------- */
 function renderNutrition() {
-  const t = nutritionTargets();
-  const total = sumFood(food);
   const key = foodDay();
+  const t = nutritionTargets(key);
+  const total = sumFood(food);
 
   if (!t) {
     $('#nutriSummary').innerHTML = `
       <h3>Calorías</h3>
-      <p class="muted small">Pon tu peso, altura, edad, actividad y el déficit que quieres para calcular tu objetivo diario.</p>
+      <p class="muted small">Pon tus objetivos (o tu peso, altura y edad para calcularlos) en «Mis datos».</p>
       <button class="btn btn-primary btn-sm" type="button" data-open-profile>Poner mis datos</button>
-      <p class="muted small">Llevas ${Math.round(total.kcal)} kcal y ${Math.round(total.p)} g de proteína.</p>`;
+      <p class="muted small">Llevas ${Math.round(total.kcal)} kcal y ${Math.round(total.p)} g de proteína.</p>
+      ${waterHTML(null)}`;
   } else {
     const left = t.kcal - total.kcal;
     const pct = clamp((total.kcal / t.kcal) * 100, 0, 100);
@@ -848,18 +909,20 @@ function renderNutrition() {
         <div class="muted small"><span>${label}</span><span>${Math.round(v)}${goal ? ` / ${goal}` : ''} g</span></div>
         <div class="bar" style="--c:var(--c-${cls})"><span style="--p:${goal ? clamp((v / goal) * 100, 0, 100) : 0}%"></span></div>
       </div>`;
-    const fatGoal = Math.round((t.kcal * 0.3) / 9);
-    const carbGoal = Math.max(0, Math.round((t.kcal - t.protein * 4 - fatGoal * 9) / 4));
+    const how = t.fixed
+      ? `Tu objetivo fijo${t.ran && t.runKcal ? ` + ${t.runKcal} kcal y ${t.runCarbs} g de hidratos por día de carrera 🏃` : t.runKcal ? ` (los días que corres sube a ${t.kcal + t.runKcal} kcal)` : ''}.`
+      : `Gasto estimado ${t.tdee} kcal (metabolismo basal ${t.bmr} × actividad) − déficit ${t.deficit}.`;
     $('#nutriSummary').innerHTML = `
       <h3>Calorías <span class="muted small">${key === TODAY ? 'hoy' : parseKey(key).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span></h3>
       <div class="kcal-big"><b>${Math.round(total.kcal)}</b><span>/ ${t.kcal} kcal</span></div>
       <div class="bar kcal-bar ${left < 0 ? 'is-over' : ''}" style="--c:var(--c-personal)"><span style="--p:${pct}%"></span></div>
       <p class="small ${left < 0 ? 'bad-text' : 'muted'}">${left >= 0 ? `Te quedan ${Math.round(left)} kcal` : `Te has pasado ${Math.round(-left)} kcal`}</p>
       ${macro('Proteína', total.p, t.protein, 'salud')}
-      ${macro('Hidratos', total.c, carbGoal, 'uni')}
-      ${macro('Grasas', total.f, fatGoal, 'personal')}
-      <p class="muted small calc-note">Gasto estimado ${t.tdee} kcal (metabolismo basal ${t.bmr} × actividad) − déficit ${t.deficit}.
-        <button class="link-btn" type="button" data-open-profile>Cambiar mis datos</button></p>
+      ${macro('Hidratos', total.c, t.carbs, 'uni')}
+      ${macro('Grasas', total.f, t.fat, 'personal')}
+      ${waterHTML(t.water)}
+      <p class="muted small calc-note">${how}
+        <button class="link-btn" type="button" data-open-profile>Cambiar mis objetivos</button></p>
       ${t.belowBmr ? '<p class="small bad-text">Tu objetivo queda por debajo de tu metabolismo basal: es un déficit muy agresivo. Coméntalo con un profesional.</p>' : ''}`;
   }
 
@@ -890,14 +953,40 @@ function renderNutrition() {
   }).join('');
 }
 
+// Agua: barra con tu objetivo y botones de vaso / botella
+function waterHTML(range) {
+  const ml = waterOn(foodDay());
+  const goal = range ? range[0] * 1000 : 2000;
+  const pct = clamp((ml / goal) * 100, 0, 100);
+  const reached = range && ml >= goal;
+  return `
+    <div class="water">
+      <div class="muted small"><span>💧 Agua</span><span>${fmtL(ml)}${range ? ` / ${fmtRange(range)}` : ''}</span></div>
+      <div class="bar" style="--c:var(--c-viaje)"><span style="--p:${pct}%"></span></div>
+      <div class="water-actions">
+        <button class="btn btn-sm btn-ghost" type="button" data-water="250">+ vaso</button>
+        <button class="btn btn-sm btn-ghost" type="button" data-water="500">+ 500 ml</button>
+        <button class="btn btn-sm btn-ghost" type="button" data-water="1000">+ 1 L</button>
+        <button class="icon-btn" type="button" data-water="-250" aria-label="Quitar un vaso" ${ml ? '' : 'disabled'}>−</button>
+        ${reached ? '<span class="small ok-text">Objetivo cumplido</span>' : ''}
+      </div>
+    </div>`;
+}
+
 function renderMyFoods() {
-  $('#myFoods').innerHTML = myFoods.length
-    ? myFoods.map((m) => `
-        <span class="chip">
-          <button type="button" data-myfood-add="${m.id}" title="Añadir 1 ración">${esc(m.n)} <em>${Math.round(m.kcal)} kcal</em></button>
-          <button type="button" class="chip-x" data-myfood-del="${m.id}" aria-label="Borrar de mis comidas">×</button>
-        </span>`).join('')
-    : '<span class="muted small">Cuando guardes comidas aparecerán aquí para añadirlas con un toque.</span>';
+  if (!myFoods.length) {
+    $('#myFoods').innerHTML = '<span class="muted small">Cuando guardes comidas aparecerán aquí para añadirlas con un toque.</span>';
+    return;
+  }
+  // Agrupadas como las guardaste (Desayunos, Snacks…); las que no tienen grupo, al final
+  const groups = [...new Set(myFoods.map((m) => m.group || 'Otras'))].sort((a, b) => (a === 'Otras') - (b === 'Otras'));
+  $('#myFoods').innerHTML = groups.map((g) => `
+    ${groups.length > 1 ? `<div class="chip-group">${esc(g)}</div>` : ''}
+    ${myFoods.filter((m) => (m.group || 'Otras') === g).map((m) => `
+      <span class="chip" title="${esc([m.desc, `${Math.round(m.p)} g prot · ${Math.round(m.c)} g hid · ${Math.round(m.f)} g grasa`].filter(Boolean).join('\n'))}">
+        <button type="button" data-myfood-add="${m.id}">${esc(m.n)} <em>${Math.round(m.kcal)} kcal</em></button>
+        <button type="button" class="chip-x" data-myfood-del="${m.id}" aria-label="Borrar de mis comidas">×</button>
+      </span>`).join('')}`).join('');
 }
 
 function renderEstimate() {
@@ -1141,21 +1230,45 @@ function bindHealth() {
   const profileDialog = $('#profileDialog');
   document.addEventListener('click', (e) => {
     if (!e.target.closest('[data-open-profile]')) return;
-    const p = profile || { sex: 'm', activity: 1.55, deficit: 400, proteinPerKg: 1.8 };
+    const p = { sex: 'm', activity: 1.55, deficit: 400, proteinPerKg: 1.8, ...(profile || {}) };
     const f = $('#profileForm');
-    ['sex', 'age', 'height', 'weight', 'activity', 'deficit', 'proteinPerKg'].forEach((k) => { if (p[k] != null) f.elements[k].value = p[k]; });
+    ['sex', 'age', 'height', 'weight', 'activity', 'deficit', 'proteinPerKg'].forEach((k) => { f.elements[k].value = p[k] ?? ''; });
+    const fx = p.fixed || {};
+    f.elements.useFixed.checked = !!fx.kcal;
+    [['fxKcal', 'kcal'], ['fxP', 'p'], ['fxC', 'c'], ['fxF', 'f'], ['fxWaterMin', 'waterMin'], ['fxWaterMax', 'waterMax'], ['fxRunKcal', 'runKcal'], ['fxRunCarbs', 'runCarbs']]
+      .forEach(([field, k]) => { f.elements[field].value = fx[k] ?? ''; });
+    $('#fixedFields').disabled = !fx.kcal;
     profileDialog.showModal();
   });
+  $('#profileForm').elements.useFixed.addEventListener('change', (e) => { $('#fixedFields').disabled = !e.target.checked; });
   $('#profileForm').addEventListener('submit', (e) => {
     if (e.submitter?.value !== 'save') return;
     const f = e.target.elements;
+    const n = (el) => (el.value === '' ? null : Number(el.value));
     profile = {
-      sex: f.sex.value, age: Number(f.age.value), height: Number(f.height.value), weight: Number(f.weight.value),
+      sex: f.sex.value, age: n(f.age), height: n(f.height), weight: n(f.weight),
       activity: Number(f.activity.value), deficit: Number(f.deficit.value), proteinPerKg: Number(f.proteinPerKg.value),
+      fixed: f.useFixed.checked && n(f.fxKcal) ? {
+        kcal: n(f.fxKcal), p: n(f.fxP) || 0, c: n(f.fxC) || 0, f: n(f.fxF) || 0,
+        waterMin: n(f.fxWaterMin) || 0, waterMax: n(f.fxWaterMax) || n(f.fxWaterMin) || 0,
+        runKcal: n(f.fxRunKcal) || 0, runCarbs: n(f.fxRunCarbs) || 0,
+      } : null,
     };
     store.set('profile', profile);
-    const weights = store.get('weightLog', {});
-    if (weights[TODAY] !== profile.weight) store.set('weightLog', { ...weights, [TODAY]: profile.weight });
+    if (profile.weight) {
+      const weights = store.get('weightLog', {});
+      if (weights[TODAY] !== profile.weight) store.set('weightLog', { ...weights, [TODAY]: profile.weight });
+    }
+    renderNutrition();
+    renderBriefing();
+  });
+
+  // Agua
+  $('#nutriSummary').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-water]');
+    if (!b) return;
+    const key = foodDay();
+    store.set(`water:${key}`, Math.max(0, waterOn(key) + Number(b.dataset.water)));
     renderNutrition();
     renderBriefing();
   });

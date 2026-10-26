@@ -696,3 +696,14 @@ details.routine:not([open]) { padding-bottom: 6px; }
 .event.is-exam { background: color-mix(in srgb, var(--c-examen) 7%, transparent); box-shadow: inset 2px 0 0 var(--c-examen); }
 .event.is-exam .event-title { font-weight: 600; }
 .exam-line { padding: 8px 10px; border-radius: var(--radius-sm); border-left: 2px solid var(--c-examen); background: color-mix(in srgb, var(--c-examen) 7%, transparent); color: var(--text-2); }
+
+/* ---------- Objetivos fijos y agua ---------- */
+.fixed-toggle { margin: 10px 0 4px; font-size: 14px; color: var(--text); }
+.fixed-grid { border: 0; padding: 0; min-width: 0; }
+.fixed-grid:disabled { opacity: .45; }
+.water { margin-top: 14px; }
+.water > .muted { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.water-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.ok-text { color: var(--ok); }
+.chip-group { width: 100%; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 6px; }
+.chip-group:first-child { margin-top: 0; }
