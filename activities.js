@@ -17,7 +17,7 @@ const ACT = {
   listSize: 8,
 };
 
-const fmtKm = (km) => Number(km).toLocaleString('es-ES', { maximumFractionDigits: 2 });
+const fmtKm = (km) => Number(km).toLocaleString(LOCALE, { maximumFractionDigits: 2 });
 const round2 = (v) => Math.round(v * 100) / 100;
 let actMap = null;
 let gpxDraft = null;
@@ -202,7 +202,7 @@ const speedOf = (e) => (e.sec ? e.km / (e.sec / 3600) : 0);
 const actStats = (e) => [
   `${fmtKm(e.km)} km`,
   e.sec ? fmtDuration(e.sec) : '',
-  e.sec ? (e.type === 'bike' ? `${round1(speedOf(e)).toLocaleString('es-ES')} km/h` : `${fmtPace(e.sec / e.km)} /km`) : '',
+  e.sec ? (e.type === 'bike' ? `${round1(speedOf(e)).toLocaleString(LOCALE)} km/h` : `${fmtPace(e.sec / e.km)} /km`) : '',
   e.kcal ? `${e.kcal} kcal${e.kcalEst ? '*' : ''}` : '',
 ].filter(Boolean).join(' · ');
 
@@ -223,72 +223,90 @@ function routeSvg(route, cls = 'act-thumb') {
 /* ---------------------------------------------------------
    RENDER · panel de Actividades
    --------------------------------------------------------- */
+// Pestaña activa del panel (Carrera / Bici); se recuerda en este dispositivo
+let actTab = (() => { try { return localStorage.getItem('lifedash-ui:actTab') || 'run'; } catch { return 'run'; } })();
+
+function actItemHTML({ key, e }) {
+  const d = parseKey(key);
+  const when = `${capitalize(d.toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' }))}${e.startTime ? ` · ${e.startTime}` : ''}`;
+  return `
+    <li class="act-item" data-act-key="${key}" data-act-id="${e.id}" style="--c:var(--c-${TYPES[e.type].color})" tabindex="0" role="button">
+      ${e.route ? routeSvg(e.route) : e.photo ? `<img class="act-thumb act-photo-thumb" src="${e.photo}" alt="">` : `<span class="act-thumb act-icon">${TYPES[e.type].emoji}</span>`}
+      <span class="act-body">
+        <b data-no-i18n>${esc(entryTitle(e))}</b>
+        <span class="muted small">${when}</span>
+        <span class="act-line">${esc(actStats(e))}</span>
+      </span>
+    </li>`;
+}
+
 function renderActivities() {
   const all = allActivities();
-  const byType = (t) => all.filter((a) => a.e.type === t).map((a) => ({ ...a.e, date: a.key })).reverse(); // antiguas → nuevas
-  const runs = byType('run'), bikes = byType('bike');
+  const runsAll = all.filter((a) => a.e.type === 'run');
+  const bikesAll = all.filter((a) => a.e.type === 'bike');
+  if (actTab === 'bike' && !bikesAll.length && runsAll.length) actTab = 'run';
+  const tab = actTab;
+  const mine = tab === 'bike' ? bikesAll : runsAll;
+  const series = mine.map((a) => ({ ...a.e, date: a.key })).reverse(); // antiguas → nuevas
   const weekStart = dateKey(mondayOf()), month = TODAY.slice(0, 7);
-  const sumKm = (arr, from) => arr.filter((r) => r.date >= from).reduce((s, r) => s + r.km, 0);
-  const monthKm = (arr) => arr.filter((r) => r.date.slice(0, 7) === month).reduce((s, r) => s + r.km, 0);
+  const weekKm = series.filter((r) => r.date >= weekStart).reduce((s, r) => s + r.km, 0);
+  const monthKm = series.filter((r) => r.date.slice(0, 7) === month).reduce((s, r) => s + r.km, 0);
+  const last = series.at(-1);
+  const timed = series.slice(-5).filter((r) => r.sec);
+  const avgPace = timed.length ? timed.reduce((s, r) => s + r.sec, 0) / timed.reduce((s, r) => s + r.km, 0) : 0;
 
-  const chart = (arr, label) => {
-    const last = arr.slice(-10);
-    const maxKm = Math.max(...last.map((r) => r.km), 1);
-    return `<div class="pace-chart">${last.map((r) => {
-      const d = parseKey(r.date);
-      return `<div class="col" title="${esc(entryTitle(r))} · ${fmtKm(r.km)} km">
-        <em>${label(r)}</em>
-        <i style="height:${Math.max(6, (r.km / maxKm) * 64)}px"></i>
-        <small>${d.getDate()}/${d.getMonth() + 1}</small>
-      </div>`;
-    }).join('')}</div>`;
-  };
+  const tabs = `
+    <div class="act-tabs" role="tablist">
+      <button type="button" role="tab" class="act-tab ${tab === 'run' ? 'is-active' : ''}" data-act-tab="run" style="--c:var(--c-viaje)">🏃 Carrera <em>${runsAll.length}</em></button>
+      <button type="button" role="tab" class="act-tab ${tab === 'bike' ? 'is-active' : ''}" data-act-tab="bike" style="--c:var(--c-proyecto)">🚴 Bici <em>${bikesAll.length}</em></button>
+    </div>`;
 
-  let html = '';
-  if (runs.length || !bikes.length) {
-    const recent = runs.slice(-5);
-    const avg = recent.filter((r) => r.sec).length
-      ? recent.filter((r) => r.sec).reduce((s, r) => s + r.sec, 0) / recent.filter((r) => r.sec).reduce((s, r) => s + r.km, 0) : 0;
-    const last = runs.at(-1);
-    html += `
-      <div class="act-section" style="--c:var(--c-viaje)">
-        <div class="act-section-head"><span>🏃 Carrera</span><span class="muted small">${fmtKm(round1(sumKm(runs, weekStart)))} km semana · ${fmtKm(round1(monthKm(runs)))} mes</span></div>
-        <div class="run-kpis">
-          <div class="kpi"><b>${last?.sec ? fmtPace(last.sec / last.km) : '—'}</b><span>Último ritmo /km</span></div>
-          <div class="kpi"><b>${avg ? fmtPace(avg) : '—'}</b><span>Media últimas 5</span></div>
-          <div class="kpi"><b>${runs.length}</b><span>Carreras</span></div>
-        </div>
-        ${runs.length ? chart(runs, (r) => (r.sec ? fmtPace(r.sec / r.km) : `${fmtKm(r.km)}`)) : '<p class="muted small">Aún no hay carreras. Súbelas con un GPX, el atajo o a mano.</p>'}
-      </div>`;
-  }
-  if (bikes.length) {
-    const last = bikes.at(-1);
-    html += `
-      <div class="act-section" style="--c:var(--c-proyecto)">
-        <div class="act-section-head"><span>🚴 Bici</span><span class="muted small">${Math.round(sumKm(bikes, weekStart))} km semana · ${Math.round(monthKm(bikes))} mes</span></div>
-        <div class="run-kpis">
-          <div class="kpi"><b>${last?.sec ? round1(speedOf(last)).toLocaleString('es-ES') : '—'}</b><span>Última km/h</span></div>
-          <div class="kpi"><b>${fmtKm(round1(last.km))}</b><span>Última km</span></div>
-          <div class="kpi"><b>${bikes.length}</b><span>Salidas</span></div>
-        </div>
-        ${chart(bikes, (r) => (r.sec ? `${Math.round(speedOf(r))}` : `${Math.round(r.km)}`))}
-      </div>`;
-  }
-  $('#actCharts').innerHTML = html;
+  const kpis = tab === 'bike' ? `
+      <div class="kpi"><b>${last?.sec ? round1(speedOf(last)).toLocaleString(LOCALE) : '—'}</b><span>Última km/h</span></div>
+      <div class="kpi"><b>${fmtKm(Math.round(weekKm))}</b><span>km esta semana</span></div>
+      <div class="kpi"><b>${fmtKm(Math.round(monthKm))}</b><span>km este mes</span></div>` : `
+      <div class="kpi"><b>${last?.sec ? fmtPace(last.sec / last.km) : '—'}</b><span>Último ritmo /km</span></div>
+      <div class="kpi"><b>${avgPace ? fmtPace(avgPace) : '—'}</b><span>Media últimas 5</span></div>
+      <div class="kpi"><b>${fmtKm(round1(weekKm))}</b><span>km semana · ${fmtKm(round1(monthKm))} mes</span></div>`;
 
-  $('#actList').innerHTML = all.length ? all.slice(0, ACT.listSize).map(({ key, e }) => {
-    const d = parseKey(key);
-    const when = `${capitalize(d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }))}${e.startTime ? ` · ${e.startTime}` : ''}`;
-    return `
-      <li class="act-item" data-act-key="${key}" data-act-id="${e.id}" style="--c:var(--c-${TYPES[e.type].color})" tabindex="0" role="button">
-        ${e.route ? routeSvg(e.route) : e.photo ? `<img class="act-thumb act-photo-thumb" src="${e.photo}" alt="">` : `<span class="act-thumb act-icon">${TYPES[e.type].emoji}</span>`}
-        <span class="act-body">
-          <b>${esc(entryTitle(e))}</b>
-          <span class="muted small">${when}</span>
-          <span class="act-line">${esc(actStats(e))}</span>
-        </span>
-      </li>`;
-  }).join('') : '';
+  const last10 = series.slice(-10);
+  const maxKm = Math.max(...last10.map((r) => r.km), 1);
+  const chart = series.length ? `<div class="pace-chart">${last10.map((r) => {
+    const d = parseKey(r.date);
+    const label = r.sec ? (tab === 'bike' ? `${Math.round(speedOf(r))}` : fmtPace(r.sec / r.km)) : fmtKm(r.km);
+    return `<div class="col" title="${esc(entryTitle(r))} · ${fmtKm(r.km)} km">
+      <em>${label}</em>
+      <i style="height:${Math.max(6, (r.km / maxKm) * 64)}px"></i>
+      <small>${d.getDate()}/${d.getMonth() + 1}</small>
+    </div>`;
+  }).join('')}</div>`
+    : `<p class="muted small">${tab === 'bike' ? 'Aún no hay salidas en bici.' : 'Aún no hay carreras.'} Súbelas con capturas, un GPX, el atajo o a mano.</p>`;
+
+  $('#actCharts').innerHTML = `
+    ${tabs}
+    <div class="act-section" style="--c:var(--c-${tab === 'bike' ? 'proyecto' : 'viaje'})">
+      <div class="run-kpis">${kpis}</div>
+      ${chart}
+    </div>`;
+
+  $('#actList').innerHTML = mine.slice(0, 3).map(actItemHTML).join('')
+    + (mine.length > 3 ? `<li><button class="btn btn-sm btn-ghost act-all-btn" type="button" data-act-all="${tab}">Ver todas (${mine.length})</button></li>` : '');
+}
+
+// Ventana con todas las actividades de un tipo, por meses
+function openAllActivities(type) {
+  const list = allActivities().filter((a) => a.e.type === type);
+  $('#allActTitle').textContent = type === 'bike' ? 'Todas las salidas en bici' : 'Todas las carreras';
+  let lastMonth = '';
+  $('#allActList').innerHTML = list.map((a) => {
+    const m = a.key.slice(0, 7);
+    const head = m !== lastMonth
+      ? `<li class="act-month">${capitalize(parseKey(`${m}-01`).toLocaleDateString(LOCALE, { month: 'long', year: 'numeric' }))}
+          <span class="muted small">${fmtKm(round1(list.filter((x) => x.key.slice(0, 7) === m).reduce((s, x) => s + x.e.km, 0)))} km</span></li>` : '';
+    lastMonth = m;
+    return head + actItemHTML(a);
+  }).join('') || '<li class="muted small">No hay actividades.</li>';
+  $('#allActDialog').showModal();
 }
 
 /* ---------------------------------------------------------
@@ -318,7 +336,7 @@ function openActivity(key, id) {
   const d = parseKey(key);
   $('#actTitle').textContent = entryTitle(e);
   $('#actMeta').textContent = [
-    capitalize(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })),
+    capitalize(d.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' })),
     e.startTime, TYPES[e.type].label,
     e.place, { gpx: 'GPX', atajo: 'Atajo de iPhone', capturas: 'Capturas de Fitness' }[e.source] || 'A mano',
   ].filter(Boolean).join(' · ');
@@ -327,7 +345,7 @@ function openActivity(key, id) {
   $('#actStats').innerHTML = `
     ${stat(`${fmtKm(e.km)}`, 'km')}
     ${stat(e.sec && fmtDuration(e.sec), 'en movimiento')}
-    ${stat(e.sec && (e.type === 'bike' ? round1(speedOf(e)).toLocaleString('es-ES') : fmtPace(e.sec / e.km)), e.type === 'bike' ? 'km/h' : 'ritmo /km')}
+    ${stat(e.sec && (e.type === 'bike' ? round1(speedOf(e)).toLocaleString(LOCALE) : fmtPace(e.sec / e.km)), e.type === 'bike' ? 'km/h' : 'ritmo /km')}
     ${stat(e.kcal && `${e.kcal}${e.kcalEst ? '*' : ''}`, 'kcal')}
     ${stat(e.elev != null && (e.route || e.source === 'capturas') ? `${e.elev} m` : '', 'desnivel +')}
     ${stat(e.hr, 'ppm media')}
@@ -353,7 +371,7 @@ function openActivity(key, id) {
       <table class="splits">${e.splits.map((s, i) => `
         <tr class="${s === best ? 'is-best' : ''}">
           <td>${(i + 1) * len}</td>
-          <td>${e.type === 'bike' ? `${round1(len / (s / 3600)).toLocaleString('es-ES')} km/h` : `${fmtPace(s / len)} /km`}</td>
+          <td>${e.type === 'bike' ? `${round1(len / (s / 3600)).toLocaleString(LOCALE)} km/h` : `${fmtPace(s / len)} /km`}</td>
           <td class="split-bar"><i style="width:${Math.round((best / s) * 100)}%"></i></td>
           <td class="muted">${fmtDuration(s)}</td>
         </tr>`).join('')}</table>
@@ -623,9 +641,22 @@ function bindActivities() {
     if (entry) setTimeout(() => openActivity(key, entry.id), 50);
   });
 
-  const open = (li) => li && openActivity(li.dataset.actKey, li.dataset.actId);
-  $('#actList').addEventListener('click', (e) => open(e.target.closest('.act-item')));
-  $('#actList').addEventListener('keydown', (e) => { if (e.key === 'Enter') open(e.target.closest('.act-item')); });
+  const open = (li) => { if (!li) return; $('#allActDialog').close(); openActivity(li.dataset.actKey, li.dataset.actId); };
+  ['#actList', '#allActList'].forEach((sel) => {
+    $(sel).addEventListener('click', (e) => {
+      const all = e.target.closest('[data-act-all]');
+      if (all) { openAllActivities(all.dataset.actAll); return; }
+      open(e.target.closest('.act-item'));
+    });
+    $(sel).addEventListener('keydown', (e) => { if (e.key === 'Enter') open(e.target.closest('.act-item')); });
+  });
+  $('#actCharts').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-act-tab]');
+    if (!t) return;
+    actTab = t.dataset.actTab;
+    try { localStorage.setItem('lifedash-ui:actTab', actTab); } catch { /* sin almacenamiento */ }
+    renderActivities();
+  });
 
   $('#actDelete').addEventListener('click', () => {
     const dialog = $('#activityDialog');

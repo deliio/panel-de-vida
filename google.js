@@ -37,7 +37,7 @@ window.GoogleSync = (() => {
     },
   };
 
-  const hhmm = () => new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  const hhmm = () => new Date().toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
   const status = (state, text) => opts.onStatus?.(state, text);
   const token = () => {
     const t = meta.get('token');

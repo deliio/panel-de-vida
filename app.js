@@ -1,4 +1,8 @@
 'use strict';
+
+// Idioma del panel (es / en). Se guarda con tus datos y se sincroniza entre dispositivos.
+const LANG = (() => { try { return JSON.parse(localStorage.getItem('lifedash:lang')) === 'en' ? 'en' : 'es'; } catch { return 'es'; } })();
+const LOCALE = LANG === 'en' ? 'en-GB' : 'es-ES';
 /* =========================================================
    PANEL DE VIDA · app.js
    Funciona 100% con datos simulados + localStorage.
@@ -74,7 +78,7 @@ const fmtRel = (d) => {
   if (n < 0) return `Venció hace ${-n} d`;
   return `En ${n} días`;
 };
-const fmtHour = (d) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+const fmtHour = (d) => d.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
 const fmtPace = (sec) => { const s = Math.round(sec); return `${Math.floor(s / 60)}:${pad(s % 60)}`; };
 const parseTime = (str) => { // "mm:ss" o "h:mm:ss" -> segundos
   const p = str.split(':').map(Number);
@@ -365,7 +369,7 @@ function renderBriefing() {
   const h = now.getHours();
   const saludo = h < 6 ? 'Buenas noches' : h < 13 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches';
   $('#greeting').textContent = `${saludo}, ${CONFIG.userName}`;
-  $('#today').textContent = capitalize(now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
+  $('#today').textContent = capitalize(now.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
 
   const pending = tasks.filter((t) => t.status !== 'done');
   const doing = tasks.filter((t) => t.status === 'doing').length;
@@ -433,7 +437,7 @@ function onGmailMessages(list) {
       cat: categorize(`${m.subject} ${m.from}`),
       time: sameDay ? fmtHour(m.date)
         : daysUntil(m.date) === -1 ? 'Ayer'
-        : capitalize(m.date.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '')),
+        : capitalize(m.date.toLocaleDateString(LOCALE, { weekday: 'short' }).replace('.', '')),
       url: `https://mail.google.com/mail/u/0/#inbox/${m.threadId}`,
     };
   });
@@ -627,7 +631,7 @@ function examText() {
   const n = daysUntil(next.date);
   const when = n === 0 ? '<strong>hoy</strong>' : n === 1 ? '<strong>mañana</strong>' : `en <strong>${n} días</strong>`;
   const soon = exams.filter((e) => daysUntil(e.date) <= 14).length;
-  return `<p class="exam-line">📝 Próximo examen: <strong>${esc(next.title)}</strong> ${when} (${next.date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}).${soon > 1 ? ` Tienes ${soon} exámenes en las próximas 2 semanas.` : ''}</p>`;
+  return `<p class="exam-line">📝 Próximo examen: <strong>${esc(next.title)}</strong> ${when} (${next.date.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' })}).${soon > 1 ? ` Tienes ${soon} exámenes en las próximas 2 semanas.` : ''}</p>`;
 }
 
 // Exámenes: los del calendario «Exams» de Google
@@ -651,7 +655,7 @@ function renderExams() {
         <li class="${daysUntil(e.date) <= 7 ? 'is-soon' : ''}">
           <span class="exam-days"><b>${when(e)}</b></span>
           <span class="exam-title">${esc(e.title)}</span>
-          <span class="muted small">${capitalize(e.date.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }))}${e.allDay ? '' : ` · ${fmtHour(e.date)}`}${e.place ? ` · ${esc(e.place)}` : ''}</span>
+          <span class="muted small">${capitalize(e.date.toLocaleDateString(LOCALE, { weekday: 'short', day: 'numeric', month: 'short' }))}${e.allDay ? '' : ` · ${fmtHour(e.date)}`}${e.place ? ` · ${esc(e.place)}` : ''}</span>
         </li>`).join('')}
     </ul>`;
 }
@@ -675,7 +679,7 @@ function renderAgenda() {
     <li class="event ${e.exam ? 'is-exam' : ''}">
       <div class="event-date">
         <b>${e.date.getDate()}</b>
-        <span>${e.date.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}</span>
+        <span>${e.date.toLocaleDateString(LOCALE, { month: 'short' }).replace('.', '')}</span>
       </div>
       <div style="min-width:0">
         <div class="event-title">${esc(e.title)}</div>
@@ -719,7 +723,7 @@ function tickCountdown() {
   const pct = clamp(((now - booked) / (start - booked)) * 100, 0, 100);
   $('#tripProgress').style.setProperty('--p', `${pct}%`);
 
-  const range = `${start.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`;
+  const range = `${start.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}`;
   $('#tripMeta').textContent = now > end ? '¡Viaje completado! Ciao, Milano 👋'
     : now >= start ? '¡Estás en Milán! Buon viaggio ✨'
     : `${detail} · ${range}`;
@@ -752,7 +756,7 @@ function renderTools() {
    RELOJ, NAVEGACIÓN Y AJUSTES
    --------------------------------------------------------- */
 function tickClock() {
-  $('#clock').textContent = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  $('#clock').textContent = new Date().toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
 }
 
 function bindNav() {
@@ -791,6 +795,14 @@ function bindGlobal() {
   // Diálogo de colores
   const dialog = $('#settings');
   $('#openSettings').addEventListener('click', () => { renderColorSettings(); dialog.showModal(); });
+
+  // Idioma: español / inglés (se guarda con tus datos y se recarga el panel)
+  $('#langLabel').textContent = LANG === 'en' ? 'Español' : 'English';
+  $('#langToggle').addEventListener('click', () => {
+    store.set('lang', LANG === 'en' ? 'es' : 'en');
+    // Con Google conectado se espera a que se suba el cambio para que el otro dispositivo también cambie
+    setTimeout(() => location.reload(), GoogleSync.isConnected() ? 2200 : 50);
+  });
   $('#colorList').addEventListener('input', (e) => {
     const cat = e.target.dataset.cat;
     if (!cat) return;

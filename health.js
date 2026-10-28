@@ -386,8 +386,8 @@ function nutritionTargets(key = foodDay()) {
 
 // Agua del día en mililitros
 const waterOn = (key) => store.get(`water:${key}`, 0);
-const fmtL = (ml) => `${(ml / 1000).toLocaleString('es-ES', { maximumFractionDigits: 2 })} L`;
-const fmtRange = (r) => `${r[0].toLocaleString('es-ES')}–${r[1].toLocaleString('es-ES')} L`;
+const fmtL = (ml) => `${(ml / 1000).toLocaleString(LOCALE, { maximumFractionDigits: 2 })} L`;
+const fmtRange = (r) => `${r[0].toLocaleString(LOCALE)}–${r[1].toLocaleString(LOCALE)} L`;
 
 const sumFood = (list) => list.reduce((t, i) => ({
   kcal: t.kcal + i.kcal, p: t.p + i.p, c: t.c + i.c, f: t.f + i.f,
@@ -609,7 +609,7 @@ function applyImport(data) {
   const what = [];
   if (list.length) {
     what.push(`${list.length} rutinas${list.some((r) => r.days?.length)
-      ? ` (apuntadas en el calendario hasta el ${parseKey(until).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })})` : ''}`);
+      ? ` (apuntadas en el calendario hasta el ${parseKey(until).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' })})` : ''}`);
   }
   if (data.foods?.length) what.push(`${data.foods.length} comidas habituales`);
   if (data.targets) what.push(`tus objetivos: ${data.targets.kcal} kcal · ${data.targets.p} P · ${data.targets.c} H · ${data.targets.f} G`);
@@ -681,7 +681,7 @@ const renderRunning = () => renderActivities();
 function renderKnee() {
   const key = kneeDay();
   const entry = kneeLog[key] || {};
-  const dayLabel = kneeOffset === 0 ? 'Hoy' : kneeOffset === -1 ? 'Ayer' : parseKey(key).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  const dayLabel = kneeOffset === 0 ? 'Hoy' : kneeOffset === -1 ? 'Ayer' : parseKey(key).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
   const slider = (side, label) => {
     const v = entry[side];
     return `
@@ -774,7 +774,7 @@ function renderCalendar() {
       </button>`;
   }
 
-  $('#calTitle').textContent = capitalize(calCursor.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }));
+  $('#calTitle').textContent = capitalize(calCursor.toLocaleDateString(LOCALE, { month: 'long', year: 'numeric' }));
   $('#fillCalendar').hidden = !hasRoutineDays();
   $('#calendar').innerHTML = ['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => `<span class="cal-wd">${d}</span>`).join('') + cells;
   $('#calStats').innerHTML = `
@@ -789,7 +789,7 @@ function renderCalendar() {
    --------------------------------------------------------- */
 function openDay(key) {
   $('#dayDialog').dataset.date = key;
-  $('#dayTitle').textContent = capitalize(parseKey(key).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }));
+  $('#dayTitle').textContent = capitalize(parseKey(key).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' }));
   resetEntryForm();
   renderDayEntries();
   $('#dayDialog').showModal();
@@ -910,7 +910,7 @@ function renderNutrition() {
       ? `Tu objetivo fijo${t.ran && t.runKcal ? ` + ${t.runKcal} kcal y ${t.runCarbs} g de hidratos por día de carrera 🏃` : t.runKcal ? ` (los días que corres sube a ${t.kcal + t.runKcal} kcal)` : ''}.`
       : `Gasto estimado ${t.tdee} kcal (metabolismo basal ${t.bmr} × actividad) − déficit ${t.deficit}.`;
     $('#nutriSummary').innerHTML = `
-      <h3>Calorías <span class="muted small">${key === TODAY ? 'hoy' : parseKey(key).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span></h3>
+      <h3>Calorías <span class="muted small">${key === TODAY ? 'hoy' : parseKey(key).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}</span></h3>
       <div class="kcal-big"><b>${Math.round(total.kcal)}</b><span>/ ${t.kcal} kcal</span></div>
       <div class="bar kcal-bar ${left < 0 ? 'is-over' : ''}" style="--c:var(--c-personal)"><span style="--p:${pct}%"></span></div>
       <p class="small ${left < 0 ? 'bad-text' : 'muted'}">${left >= 0 ? `Te quedan ${Math.round(left)} kcal` : `Te has pasado ${Math.round(-left)} kcal`}</p>
@@ -923,7 +923,7 @@ function renderNutrition() {
       ${t.belowBmr ? '<p class="small bad-text">Tu objetivo queda por debajo de tu metabolismo basal: es un déficit muy agresivo. Coméntalo con un profesional.</p>' : ''}`;
   }
 
-  $('#foodDayLabel').textContent = foodOffset === 0 ? 'Hoy' : foodOffset === -1 ? 'Ayer' : parseKey(key).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  $('#foodDayLabel').textContent = foodOffset === 0 ? 'Hoy' : foodOffset === -1 ? 'Ayer' : parseKey(key).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' });
   $('[data-food-nav="1"]').disabled = foodOffset >= 0;
   renderMyFoods();
 
@@ -975,17 +975,24 @@ function renderMyFoods() {
     $('#myFoods').innerHTML = '<span class="muted small">Cuando guardes comidas aparecerán aquí para añadirlas con un toque.</span>';
     return;
   }
-  // Agrupadas como las guardaste (Desayunos, Snacks…); las que no tienen grupo, al final
+  // Una pestaña por grupo (Desayunos, Boles…) para que la lista no crezca hacia abajo
   const groups = [...new Set(myFoods.map((m) => m.group || 'Otras'))].sort((a, b) => (a === 'Otras') - (b === 'Otras'));
-  $('#myFoods').innerHTML = groups.map((g) => `
-    ${groups.length > 1 ? `<div class="chip-group">${esc(g)}</div>` : ''}
-    ${myFoods.filter((m) => (m.group || 'Otras') === g).map((m) => `
+  if (!groups.includes(foodGroup)) foodGroup = groups[0];
+  const chips = myFoods.filter((m) => (m.group || 'Otras') === foodGroup).map((m) => `
       <span class="chip" title="${esc([m.desc, `${Math.round(m.p)} g prot · ${Math.round(m.c)} g hid · ${Math.round(m.f)} g grasa`].filter(Boolean).join('\n'))}">
-        <button type="button" data-myfood-add="${m.id}">${esc(m.n)} <em>${Math.round(m.kcal)} kcal</em></button>
+        <button type="button" data-myfood-add="${m.id}"><span data-no-i18n>${esc(m.n)}</span> <em>${Math.round(m.kcal)} kcal</em></button>
         ${m.variant ? `<button type="button" class="chip-variant" data-myfood-variant="${m.id}" title="${esc(m.variant.label)}: ${Math.round(m.kcal + m.variant.kcal)} kcal">${esc(m.variant.short || 'variante')}</button>` : ''}
         <button type="button" class="chip-x" data-myfood-del="${m.id}" aria-label="Borrar de mis comidas">×</button>
-      </span>`).join('')}`).join('');
+      </span>`).join('');
+  $('#myFoods').innerHTML = `
+    ${groups.length > 1 ? `<div class="group-tabs">${groups.map((g) => `
+      <button type="button" class="group-tab ${g === foodGroup ? 'is-active' : ''}" data-food-group="${esc(g)}"><span data-no-i18n>${esc(g)}</span>
+        <em>${myFoods.filter((m) => (m.group || 'Otras') === g).length}</em></button>`).join('')}</div>` : ''}
+    <div class="chips-wrap">${chips}</div>`;
 }
+
+// Grupo de «Mis comidas» abierto; se recuerda en este dispositivo
+let foodGroup = (() => { try { return localStorage.getItem('lifedash-ui:foodGroup') || ''; } catch { return ''; } })();
 
 function renderEstimate() {
   const box = $('#foodEstimate');
@@ -1182,7 +1189,7 @@ function bindHealth() {
   });
   $('#fillCalendar').addEventListener('click', () => {
     const until = dateKey(addDays(41));
-    if (!confirm(`¿Apuntar tus rutinas en sus días hasta el ${parseKey(until).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}?\n\nLos días que ya tengan algo apuntado no se tocan.`)) return;
+    if (!confirm(`¿Apuntar tus rutinas en sus días hasta el ${parseKey(until).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' })}?\n\nLos días que ya tengan algo apuntado no se tocan.`)) return;
     const added = fillCalendar(TODAY, until);
     refreshTraining();
     alert(added ? `${added} entrenos apuntados.` : 'No había días libres que rellenar.');
@@ -1340,6 +1347,13 @@ function bindHealth() {
     if (add) {
       const m = myFoods.find((x) => x.id === add.dataset.myfoodAdd);
       if (m) addFood({ name: m.n, kcal: m.kcal, p: m.p, c: m.c, f: m.f });
+      return;
+    }
+    const groupTab = e.target.closest('[data-food-group]');
+    if (groupTab) {
+      foodGroup = groupTab.dataset.foodGroup;
+      try { localStorage.setItem('lifedash-ui:foodGroup', foodGroup); } catch { /* sin almacenamiento */ }
+      renderMyFoods();
       return;
     }
     const variant = e.target.closest('[data-myfood-variant]');

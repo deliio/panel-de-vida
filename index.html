@@ -66,6 +66,9 @@
 
     <div class="sidebar-foot">
       <div class="clock" id="clock">--:--</div>
+      <button class="btn btn-ghost lang-btn" id="langToggle" type="button" data-no-i18n>
+        <span class="lang-icon">🌐</span><span id="langLabel">English</span>
+      </button>
       <button class="btn btn-ghost" id="openSettings" type="button">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.2"/><circle cx="12" cy="7.5" r="1.2"/><circle cx="16" cy="10" r="1.2"/></svg>
         Colores
@@ -473,6 +476,12 @@
   </div>
 </dialog>
 
+<!-- ============ TODAS LAS ACTIVIDADES DE UN TIPO ============ -->
+<dialog class="dialog" id="allActDialog">
+  <div class="card-head"><h2 id="allActTitle">Actividades</h2><button class="icon-btn" type="button" onclick="this.closest('dialog').close()" aria-label="Cerrar">×</button></div>
+  <ul class="act-list act-list-all" id="allActList"></ul>
+</dialog>
+
 <!-- ============ SUBIR GPX (vista previa) ============ -->
 <dialog class="dialog" id="gpxDialog">
   <form method="dialog" id="gpxForm">
@@ -514,6 +523,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="google.js"></script>
 <script src="app.js"></script>
+<script src="i18n.js"></script>
 <script src="health.js"></script>
 <script src="activities.js"></script>
 </body>

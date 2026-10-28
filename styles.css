@@ -759,3 +759,30 @@ details.routine:not([open]) { padding-bottom: 6px; }
 .act-status { margin: -4px 0 12px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg); border: 1px dashed var(--border-strong); color: var(--text-2); }
 .act-photo { display: block; width: 100%; max-height: 300px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); margin: 10px 0; }
 .act-photo-thumb { object-fit: cover; }
+
+/* ---------- Pestañas y listas con altura máxima (menos scroll) ---------- */
+.act-tabs, .group-tabs { display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); margin-bottom: 12px; overflow-x: auto; scrollbar-width: none; }
+.act-tabs::-webkit-scrollbar, .group-tabs::-webkit-scrollbar { display: none; }
+.act-tab, .group-tab {
+  flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 6px 12px; border-radius: 999px; border: 0; background: none; cursor: pointer;
+  color: var(--text-2); font-size: 13px; font-weight: 500; white-space: nowrap;
+}
+.act-tab em, .group-tab em { font-style: normal; font: 11px var(--mono); color: var(--muted); }
+.act-tab.is-active { background: color-mix(in srgb, var(--c) 18%, var(--surface-2)); color: var(--text); }
+.group-tab.is-active { background: var(--hover); color: var(--text); }
+.group-tabs { border-radius: var(--radius-sm); }
+.group-tab { flex: 0 0 auto; border-radius: 6px; font-size: 12px; padding: 5px 10px; }
+.chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.act-all-btn { width: 100%; }
+.act-list-all { max-height: 70vh; overflow-y: auto; margin: 0; padding-right: 2px; }
+.act-month { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--text-2); margin: 10px 0 2px; }
+.act-month:first-child { margin-top: 0; }
+#allActDialog { width: min(520px, calc(100% - 32px)); }
+/* Listas que crecen: altura máxima con scroll dentro */
+#foodList { max-height: 420px; overflow-y: auto; padding-right: 2px; }
+.column-body { max-height: 460px; overflow-y: auto; padding-right: 2px; }
+.mail-list { max-height: 440px; overflow-y: auto; }
+#routinesList { max-height: 520px; overflow-y: auto; padding-right: 2px; }
+.lang-btn .lang-icon { font-size: 15px; line-height: 1; }
+@media (max-width: 640px) { .sidebar-foot .lang-btn .lang-icon { font-size: 18px; } }

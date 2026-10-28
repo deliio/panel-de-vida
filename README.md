@@ -60,3 +60,7 @@ La clave del panel se guarda en tu Drive privado (sincronizada entre dispositivo
 ## Personalizar
 Edita `CONFIG` al principio de `app.js` (nombre, fechas del viaje, enlace de Finanzas). Tus rutinas, entrenos, comidas y datos de calorías se gestionan desde el propio panel; la tabla de alimentos caseros está en `FOODS` (`health.js`).
 Busca `🔌 API` para ver dónde se conectan los servicios externos.
+
+## Idioma / Language
+
+Botón 🌐 en la barra lateral para cambiar entre español e inglés (se sincroniza entre dispositivos). La traducción la hace `i18n.js`; lo que escribes tú (tareas, comidas, notas) y el reconocimiento de comidas siguen en español.
