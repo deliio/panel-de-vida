@@ -671,37 +671,9 @@ function applyImport(data) {
 }
 
 /* ---------------------------------------------------------
-   RENDER · Running (tus carreras apuntadas)
+   RENDER · Actividades → activities.js
    --------------------------------------------------------- */
-function renderRunning() {
-  const runs = allRuns();
-  const last = runs.at(-1);
-  const recent = runs.slice(-5);
-  const avgPace = recent.length ? recent.reduce((s, r) => s + r.sec, 0) / recent.reduce((s, r) => s + r.km, 0) : 0;
-  const weekKm = runs.filter((r) => parseKey(r.date) >= mondayOf()).reduce((s, r) => s + r.km, 0);
-  const monthKm = runs.filter((r) => r.date.slice(0, 7) === TODAY.slice(0, 7)).reduce((s, r) => s + r.km, 0);
-
-  $('#runKpis').innerHTML = `
-    <div class="kpi"><b>${last ? fmtPace(last.sec / last.km) : '—'}</b><span>Último ritmo /km</span></div>
-    <div class="kpi"><b>${avgPace ? fmtPace(avgPace) : '—'}</b><span>Media últimas 5</span></div>
-    <div class="kpi"><b>${round1(weekKm)}</b><span>km semana · ${round1(monthKm)} mes</span></div>`;
-
-  if (!runs.length) {
-    $('#paceChart').innerHTML = '<p class="muted small">Aún no has apuntado carreras. Añádelas aquí abajo o desde el calendario.</p>';
-    return;
-  }
-  // Barras: más altas = más km. Encima, el ritmo de cada salida.
-  const last10 = runs.slice(-10);
-  const maxKm = Math.max(...last10.map((r) => r.km), 1);
-  $('#paceChart').innerHTML = last10.map((r) => {
-    const d = parseKey(r.date);
-    return `<div class="col" title="${esc(r.name)} · ${r.km} km · ${fmtPace(r.sec / r.km)} /km">
-      <em>${fmtPace(r.sec / r.km)}</em>
-      <i style="height:${Math.max(6, (r.km / maxKm) * 64)}px"></i>
-      <small>${d.getDate()}/${d.getMonth() + 1}</small>
-    </div>`;
-  }).join('');
-}
+const renderRunning = () => renderActivities();
 
 /* ---------------------------------------------------------
    RENDER · Rodillas (solo tu registro de dolor)
@@ -734,7 +706,7 @@ function renderKnee() {
     ${slider('r', 'Derecha')}
     <button class="btn btn-sm btn-ghost" type="button" data-knee-zero>Sin dolor en ninguna (0 y 0)</button>
     <input type="text" class="knee-note" data-side="note" maxlength="140" placeholder="Nota (p. ej. molestia al bajar escaleras)" value="${esc(entry.note || '')}">
-    ${runsHere.length ? `<p class="muted small">Ese día corriste ${joinEs(runsHere.map((e) => `${e.km} km`))}.</p>` : ''}
+    ${runsHere.length ? `<p class="muted small">Ese día corriste ${joinEs(runsHere.map((e) => `${fmtKm(e.km)} km`))}.</p>` : ''}
     ${kneeChart()}`;
 }
 
@@ -843,6 +815,7 @@ function renderDayEntries() {
           ${e.strava ? '<span class="muted small">Strava</span>' : `
             <label class="de-done"><input type="checkbox" data-entry-done ${e.done ? 'checked' : ''}> Hecho</label>
             <label class="de-move" title="Mover a otro día">Mover <input type="date" data-entry-move value="${key}" aria-label="Mover a otro día"></label>
+            ${e.km ? '<button class="link-btn" type="button" data-entry-open>Ver</button>' : ''}
             <button class="icon-btn" type="button" data-entry-del aria-label="Borrar">×</button>`}
         </div>
         ${routine?.note ? `<p class="routine-note">${esc(routine.note)}</p>` : ''}
@@ -1096,6 +1069,7 @@ function renderHealth() {
 }
 
 function bindHealth() {
+  bindActivities(); // activities.js
   // Rutinas
   $('#newRoutine').addEventListener('click', () => openRoutineEditor());
   $('#routinesList').addEventListener('click', (e) => {
@@ -1155,10 +1129,13 @@ function bindHealth() {
     const clock = parseClock($('#runTime').value);
     if (!(km > 0) || !clock) { (!(km > 0) ? $('#runKm') : $('#runTime')).focus(); return; }
     const sec = $('#runMode').value === 'pace' ? Math.round(clock * km) : clock;
-    trainLog = { ...trainLog, [TODAY]: [...(trainLog[TODAY] || []), { id: uid(), type: 'run', title: '', km, sec, done: true }] };
-    saveTrainLog();
+    const type = $('#runType').value;
+    const now = new Date();
+    saveActivity(TODAY, {
+      id: uid(), type, title: defaultTitle(type, now), km, sec, done: true,
+      kcal: estimateKcal(type, km, sec), kcalEst: true, startTime: fmtHour(now), source: 'manual',
+    });
     e.target.reset();
-    refreshTraining();
   });
 
   // Rodillas
@@ -1247,6 +1224,8 @@ function bindHealth() {
     }
   });
   $('#dayEntries').addEventListener('click', (e) => {
+    const openBtn = e.target.closest('[data-entry-open]');
+    if (openBtn) { const key = $('#dayDialog').dataset.date; $('#dayDialog').close(); openActivity(key, openBtn.closest('[data-entry]').dataset.entry); return; }
     if (!e.target.closest('[data-entry-del]')) return;
     updateEntry($('#dayDialog').dataset.date, e.target.closest('[data-entry]').dataset.entry, () => null);
   });

@@ -150,12 +150,22 @@
             <div id="routinesList"></div>
           </div>
 
-          <!-- Running: tus carreras apuntadas -->
-          <div class="panel">
-            <h3>Running</h3>
-            <div class="run-kpis" id="runKpis"></div>
-            <div class="pace-chart" id="paceChart"></div>
+          <!-- Actividades: carreras y bici (GPX con mapa, atajo de iPhone o a mano) -->
+          <div class="panel" id="activitiesPanel">
+            <h3>Actividades
+              <span class="head-actions">
+                <label class="btn btn-sm btn-ghost" for="gpxFile">⬆ GPX</label>
+                <input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden>
+                <button class="btn btn-sm btn-ghost" id="shortcutHelp" type="button">Atajo iPhone</button>
+              </span>
+            </h3>
+            <div id="actCharts"></div>
+            <ul class="act-list" id="actList"></ul>
             <form class="run-form" id="runForm" autocomplete="off">
+              <select id="runType" aria-label="Tipo">
+                <option value="run">Carrera</option>
+                <option value="bike">Bici</option>
+              </select>
               <input type="text" id="runKm" inputmode="decimal" placeholder="km" aria-label="Kilómetros">
               <select id="runMode" aria-label="Tiempo o ritmo">
                 <option value="time">Tiempo total</option>
@@ -442,10 +452,61 @@
 </dialog>
 
 
+<!-- ============ ACTIVIDAD (ficha tipo Strava) ============ -->
+<dialog class="dialog dialog-wide" id="activityDialog">
+  <div class="card-head"><h2 id="actTitle">Actividad</h2><button class="icon-btn" type="button" onclick="this.closest('dialog').close()" aria-label="Cerrar">×</button></div>
+  <p class="muted small" id="actMeta"></p>
+  <div class="act-map" id="actMap" hidden></div>
+  <p class="muted small act-nomap" id="actNoMap">Sin recorrido: esta actividad llegó desde el atajo o a mano. Sube su GPX para ver el mapa.</p>
+  <div class="run-kpis act-stats" id="actStats"></div>
+  <p class="muted small" id="actNote"></p>
+  <div id="actElev"></div>
+  <div id="actSplits"></div>
+  <div class="dialog-foot">
+    <button class="btn btn-ghost" id="actDelete" type="button">Borrar</button>
+    <span class="spacer"></span>
+    <button class="btn" type="button" onclick="this.closest('dialog').close()">Cerrar</button>
+  </div>
+</dialog>
+
+<!-- ============ SUBIR GPX (vista previa) ============ -->
+<dialog class="dialog" id="gpxDialog">
+  <form method="dialog" id="gpxForm">
+    <div class="card-head"><h2>Nueva actividad</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
+    <div class="gpx-preview"><div id="gpxThumb"></div><p class="small" id="gpxSummary"></p></div>
+    <div class="form-grid">
+      <label class="span-all">Nombre<input type="text" id="gpxTitle" maxlength="60"></label>
+      <label>Tipo<select id="gpxType"><option value="run">Carrera</option><option value="bike">Bici</option></select></label>
+      <label>Fecha<input type="date" id="gpxDate"></label>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button>
+      <button class="btn btn-primary" value="save">Guardar actividad</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ ATAJO DE IPHONE (instrucciones) ============ -->
+<dialog class="dialog dialog-wide" id="shortcutDialog">
+  <div class="card-head"><h2>Atajo «Subir entreno»</h2><button class="icon-btn" type="button" onclick="this.closest('dialog').close()" aria-label="Cerrar">×</button></div>
+  <p class="small">Al acabar un entreno grabado con el Apple Watch o el iPhone, ejecutas el atajo y la actividad se guarda aquí con los km, el tiempo y las calorías de la app Salud. El mapa no se puede leer desde Atajos: para el recorrido, sube el GPX.</p>
+  <h3 class="dlg-sub">Cómo crearlo (app Atajos → +)</h3>
+  <ol class="steps-list">
+    <li><b>Elegir del menú</b> con dos opciones: <code>Carrera</code> y <code>Bici</code>. En cada una añade <b>Texto</b> con <code>run</code> o <code>bike</code> y <b>Asignar variable</b> <code>Tipo</code>.</li>
+    <li><b>Solicitar entrada</b> de tipo número: «¿Cuántos minutos ha durado?». Asigna la variable <code>Minutos</code>.</li>
+    <li><b>Buscar muestras de Salud</b>: tipo <i>Distancia recorrida caminando y corriendo</i> (en la rama Bici: <i>Distancia en bicicleta</i>), con «Fecha de inicio está en los últimos <code>Minutos</code> minutos». Luego <b>Calcular estadísticas → Suma</b> y asígnalo a <code>Km</code>.</li>
+    <li><b>Buscar muestras de Salud</b> de <i>Energía activa</i> en los mismos minutos → <b>Calcular estadísticas → Suma</b> → variable <code>Kcal</code>.</li>
+    <li><b>URL</b> con este texto, cambiando las palabras en mayúsculas por tus variables:<br><code class="url-code" id="shortcutUrl"></code></li>
+    <li><b>Abrir URL</b>. El panel te preguntará si guardas la actividad.</li>
+  </ol>
+  <p class="muted small">Ponle al atajo un icono y añádelo a la pantalla de inicio o al Apple Watch. Si en la URL usas <code>tipo=bike</code> se guarda como bici. Puedes añadir <code>&amp;titulo=Rodaje suave</code>.</p>
+</dialog>
+
 <!-- Google Identity Services (inicio de sesión para Calendar y Drive) -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="google.js"></script>
 <script src="app.js"></script>
 <script src="health.js"></script>
+<script src="activities.js"></script>
 </body>
 </html>

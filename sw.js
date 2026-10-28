@@ -1,8 +1,8 @@
 /* Service worker: permite instalar el panel como app y abrirlo sin conexión.
    Estrategia "red primero": siempre intenta la versión nueva y, si no hay internet,
    usa la copia guardada. Las llamadas a Google no pasan por aquí. */
-const CACHE = 'panel-de-vida-v11';
-const SHELL = ['./', './index.html', './styles.css', './app.js', './health.js', './google.js', './manifest.json', './icons/icon-192.png'];
+const CACHE = 'panel-de-vida-v12';
+const SHELL = ['./', './index.html', './styles.css', './app.js', './health.js', './activities.js', './google.js', './manifest.json', './icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

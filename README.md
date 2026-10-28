@@ -10,6 +10,7 @@ Se instala como app en el móvil y en el ordenador, y se sincroniza entre los do
 - **Hoja de ruta · Futuro**: plan de carrera por fases (3º ADE → PL-300 → Altia → salto global) con pasos marcables.
 - **Hub universitario & proyectos**: Kanban (Pendiente / En proceso / Hecho) con arrastrar y soltar y etiquetas de color.
 - **Salud & deporte**: tus propias rutinas (las creas tú), tus carreras con km y tiempo o ritmo, y registro diario de dolor de rodillas.
+- **Actividades (tipo Strava)**: carreras y bici con mapa del recorrido, parciales y desnivel subiendo un archivo GPX, o en un toque desde un atajo de iPhone (km, tiempo y calorías de la app Salud). En el panel, «Atajo iPhone» explica cómo crearlo.
 - **Calendario de entrenos**: apuntas lo que vas a hacer y lo que hiciste cada día; nada viene predefinido.
 - **Nutrición & calorías**: escribes lo que has comido como lo dirías ("café con leche sin azúcar") y se estiman las calorías con una tabla de comida casera; guarda tus comidas habituales.
 - **Agenda & viajes**: tus próximos eventos de Google Calendar y cuenta atrás para el viaje a Milán.
