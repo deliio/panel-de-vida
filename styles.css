@@ -707,3 +707,8 @@ details.routine:not([open]) { padding-bottom: 6px; }
 .ok-text { color: var(--ok); }
 .chip-group { width: 100%; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 6px; }
 .chip-group:first-child { margin-top: 0; }
+
+/* ---------- Gráfica de rodillas: ejes en HTML; variante de bol ---------- */
+.kc-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.chip .chip-variant { font-size: 11px; color: var(--muted); padding: 4px 6px; border-left: 1px solid var(--border-strong); }
+.chip .chip-variant:hover { color: var(--text); }

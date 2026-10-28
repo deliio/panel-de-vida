@@ -256,7 +256,7 @@ const cache = {
 const foodDay = () => dateKey(addDays(foodOffset));
 const kneeDay = () => dateKey(addDays(kneeOffset));
 const round1 = (v) => Math.round(v * 10) / 10;
-const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9.,]+/g, ' ').replace(/\s+/g, ' ').trim();
+const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/(\d)([a-z])/g, '$1 $2').replace(/[,.](?!\d)/g, ' , ').replace(/[^a-z0-9.,]+/g, ' ').replace(/\s+/g, ' ').trim(); // "40g" → "40 g"
 
 function loadHealthState() {
   // Si vienes de la versión anterior, se reaprovechan tus datos (sin escribir nada hasta que cambies algo)
@@ -395,7 +395,8 @@ const sumFood = (list) => list.reduce((t, i) => ({
 
 // Lista de alimentos para buscar: primero tus comidas guardadas, luego la tabla casera
 function foodIndex() {
-  const mine = myFoods.map((m) => ({ n: m.n, a: [norm(m.n)], mine: m, kcal: m.kcal, p: m.p, c: m.c, f: m.f, g: 1, each: 1 }));
+  // Tus comidas se reconocen por su nombre y por los nombres alternativos que tengan
+  const mine = myFoods.map((m) => ({ n: m.n, a: [m.n, ...(m.aliases || [])], mine: m, kcal: m.kcal, p: m.p, c: m.c, f: m.f, g: 1, each: 1 }));
   const list = [];
   [...mine, ...FOODS].forEach((f) => f.a.forEach((alias) => list.push({ alias: norm(alias), food: f })));
   return list.sort((a, b) => b.alias.length - a.alias.length);
@@ -408,7 +409,11 @@ function quantityBefore(text, food, aliasUnit) {
   const n = m[1] ? (NUM_WORDS[m[1]] ?? parseFloat(m[1].replace(',', '.'))) : null;
   const unit = m[2] && UNIT_ALIASES[m[2]] ? UNIT_ALIASES[m[2]] : null;
   if (n == null && !unit) return null;
-  if (food.mine) return (n ?? 1);                       // tus comidas: en raciones
+  if (food.mine) {                                      // tus comidas: en raciones
+    if (unit !== 'g' && unit !== 'kg') return n ?? 1;
+    const grams = (n ?? 1) * (unit === 'kg' ? 1000 : 1);
+    return food.mine.g ? grams / food.mine.g : 1;       // "200 g de fresas" si sabes cuánto pesa tu ración
+  }
   const count = n ?? 1;
   if (unit === 'g') return count;
   if (unit === 'kg') return count * 1000;
@@ -423,6 +428,19 @@ function estimateFood(text) {
   const t = ` ${norm(text)} `;
   const taken = new Array(t.length).fill(false);
   const parts = [];
+
+  // Variantes de tus comidas, p. ej. "bol … con 1 yogur": se aplica el ajuste y no se cuenta otro yogur
+  myFoods.filter((m) => m.variant?.re).forEach((m) => {
+    if (![m.n, ...(m.aliases || [])].some((a) => t.includes(` ${norm(a)} `))) return;
+    let re;
+    try { re = new RegExp(m.variant.re); } catch { return; }
+    const hit = re.exec(t);
+    if (!hit) return;
+    taken.fill(true, hit.index, hit.index + hit[0].length);
+    const v = m.variant;
+    parts.push({ pos: t.length + 1, food: { n: v.label, mine: { n: v.label }, kcal: v.kcal, p: v.p, c: v.c, f: v.f }, amount: 1, auto: true });
+  });
+
   foodIndex().forEach(({ alias, food }) => {
     const re = new RegExp(`(?<= )${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?= )`, 'g');
     let m;
@@ -462,7 +480,7 @@ function estimateFood(text) {
   // Palabras que no he reconocido
   const unknown = [];
   t.split(' ').reduce((pos, w) => {
-    if (w && !taken[pos] && !STOPWORDS.has(w) && !/^\d+([.,]\d+)?$/.test(w) && !UNIT_ALIASES[w]) unknown.push(w);
+    if (w && !taken[pos] && !STOPWORDS.has(w) && !/^\d+([.,]\d+)?$/.test(w) && !/^[.,]+$/.test(w) && !UNIT_ALIASES[w]) unknown.push(w);
     return pos + w.length + 1;
   }, 0);
 
@@ -613,6 +631,13 @@ function applyImport(data) {
       id: uid(), n: String(m.n).slice(0, 60), group: m.group ? String(m.group).slice(0, 30) : '',
       desc: m.desc ? String(m.desc).slice(0, 200) : '',
       kcal: Number(m.kcal) || 0, p: Number(m.p) || 0, c: Number(m.c) || 0, f: Number(m.f) || 0,
+      ...(Number(m.g) > 0 ? { g: Number(m.g) } : {}),                       // gramos de una ración
+      ...(Array.isArray(m.aliases) ? { aliases: m.aliases.map((a) => String(a).slice(0, 60)).slice(0, 8) } : {}),
+      ...(m.variant ? { variant: {
+        re: String(m.variant.re || ''), label: String(m.variant.label || 'Variante').slice(0, 40),
+        short: String(m.variant.short || '').slice(0, 12),
+        kcal: Number(m.variant.kcal) || 0, p: Number(m.variant.p) || 0, c: Number(m.variant.c) || 0, f: Number(m.variant.f) || 0,
+      } } : {}),
     }));
     const names = new Set(incoming.map((m) => norm(m.n)));
     myFoods = [...myFoods.filter((m) => !names.has(norm(m.n))), ...incoming]; // las de mismo nombre se actualizan
@@ -715,7 +740,7 @@ function renderKnee() {
 
 // Últimos 28 días: dolor de cada rodilla (líneas) y km corridos (barras)
 function kneeChart() {
-  const W = 280, H = 90, DAYS = 28, top = 6, base = 78;
+  const W = 280, H = 82, DAYS = 28, top = 6, base = 78;
   const x = (i) => 4 + (i * (W - 8)) / (DAYS - 1);
   const y = (v) => base - (v / 10) * (base - top);
   const keys = Array.from({ length: DAYS }, (_, i) => dateKey(addDays(i - DAYS + 1)));
@@ -737,9 +762,8 @@ function kneeChart() {
       <polyline points="${line('l')}" class="kc-l"/>
       <polyline points="${line('r')}" class="kc-r"/>
       <line x1="0" x2="${W}" y1="${base}" y2="${base}" class="kc-base"/>
-      <text x="0" y="${H - 1}" class="kc-label">hace 4 sem.</text>
-      <text x="${W}" y="${H - 1}" text-anchor="end" class="kc-label">hoy</text>
     </svg>
+    <div class="kc-axis"><span>hace 4 semanas</span><span>hace 2 semanas</span><span>hoy</span></div>
     <div class="legend">
       <span><i class="lg-l"></i>Izquierda</span><span><i class="lg-r"></i>Derecha</span><span><i class="lg-run"></i>km corridos</span>
     </div>`;
@@ -985,6 +1009,7 @@ function renderMyFoods() {
     ${myFoods.filter((m) => (m.group || 'Otras') === g).map((m) => `
       <span class="chip" title="${esc([m.desc, `${Math.round(m.p)} g prot · ${Math.round(m.c)} g hid · ${Math.round(m.f)} g grasa`].filter(Boolean).join('\n'))}">
         <button type="button" data-myfood-add="${m.id}">${esc(m.n)} <em>${Math.round(m.kcal)} kcal</em></button>
+        ${m.variant ? `<button type="button" class="chip-variant" data-myfood-variant="${m.id}" title="${esc(m.variant.label)}: ${Math.round(m.kcal + m.variant.kcal)} kcal">${esc(m.variant.short || 'variante')}</button>` : ''}
         <button type="button" class="chip-x" data-myfood-del="${m.id}" aria-label="Borrar de mis comidas">×</button>
       </span>`).join('')}`).join('');
 }
@@ -1336,6 +1361,13 @@ function bindHealth() {
     if (add) {
       const m = myFoods.find((x) => x.id === add.dataset.myfoodAdd);
       if (m) addFood({ name: m.n, kcal: m.kcal, p: m.p, c: m.c, f: m.f });
+      return;
+    }
+    const variant = e.target.closest('[data-myfood-variant]');
+    if (variant) {
+      const m = myFoods.find((x) => x.id === variant.dataset.myfoodVariant);
+      const v = m?.variant;
+      if (v) addFood({ name: `${m.n} (${v.short || v.label})`, kcal: m.kcal + v.kcal, p: m.p + v.p, c: m.c + v.c, f: m.f + v.f });
       return;
     }
     const del = e.target.closest('[data-myfood-del]');
