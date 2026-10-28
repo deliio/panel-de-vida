@@ -154,11 +154,14 @@
           <div class="panel" id="activitiesPanel">
             <h3>Actividades
               <span class="head-actions">
+                <label class="btn btn-sm btn-ghost" for="shotFiles" title="Capturas de la ficha del entreno en Fitness">📷 Capturas</label>
+                <input type="file" id="shotFiles" accept="image/*" multiple hidden>
                 <label class="btn btn-sm btn-ghost" for="gpxFile">⬆ GPX</label>
                 <input type="file" id="gpxFile" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden>
                 <button class="btn btn-sm btn-ghost" id="shortcutHelp" type="button">Atajo iPhone</button>
               </span>
             </h3>
+            <p class="small act-status" id="actStatus" hidden></p>
             <div id="actCharts"></div>
             <ul class="act-list" id="actList"></ul>
             <form class="run-form" id="runForm" autocomplete="off">
@@ -457,6 +460,7 @@
   <div class="card-head"><h2 id="actTitle">Actividad</h2><button class="icon-btn" type="button" onclick="this.closest('dialog').close()" aria-label="Cerrar">×</button></div>
   <p class="muted small" id="actMeta"></p>
   <div class="act-map" id="actMap" hidden></div>
+  <img class="act-photo" id="actPhoto" alt="Mapa del entreno (captura)" hidden>
   <p class="muted small act-nomap" id="actNoMap">Sin recorrido: esta actividad llegó desde el atajo o a mano. Sube su GPX para ver el mapa.</p>
   <div class="run-kpis act-stats" id="actStats"></div>
   <p class="muted small" id="actNote"></p>
@@ -472,13 +476,17 @@
 <!-- ============ SUBIR GPX (vista previa) ============ -->
 <dialog class="dialog" id="gpxDialog">
   <form method="dialog" id="gpxForm">
-    <div class="card-head"><h2>Nueva actividad</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
-    <div class="gpx-preview"><div id="gpxThumb"></div><p class="small" id="gpxSummary"></p></div>
+    <div class="card-head"><h2 id="gpxHeading">Nueva actividad</h2><button class="icon-btn" value="cancel" formnovalidate aria-label="Cerrar">×</button></div>
+    <div class="gpx-preview"><div id="gpxThumb"></div><p class="small muted" id="gpxSummary"></p></div>
     <div class="form-grid">
       <label class="span-all">Nombre<input type="text" id="gpxTitle" maxlength="60"></label>
       <label>Tipo<select id="gpxType"><option value="run">Carrera</option><option value="bike">Bici</option></select></label>
       <label>Fecha<input type="date" id="gpxDate"></label>
+      <label>Km<input type="text" id="gpxKm" inputmode="decimal"></label>
+      <label>Tiempo (h:mm:ss)<input type="text" id="gpxTime" placeholder="mm:ss"></label>
+      <label>Calorías<input type="number" id="gpxKcal" min="0"></label>
     </div>
+    <p class="small warn-text" id="gpxWarn"></p>
     <div class="dialog-foot">
       <button class="btn btn-ghost" value="cancel" formnovalidate>Cancelar</button>
       <button class="btn btn-primary" value="save">Guardar actividad</button>

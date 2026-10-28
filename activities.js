@@ -281,7 +281,7 @@ function renderActivities() {
     const when = `${capitalize(d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }))}${e.startTime ? ` · ${e.startTime}` : ''}`;
     return `
       <li class="act-item" data-act-key="${key}" data-act-id="${e.id}" style="--c:var(--c-${TYPES[e.type].color})" tabindex="0" role="button">
-        ${e.route ? routeSvg(e.route) : `<span class="act-thumb act-icon">${TYPES[e.type].emoji}</span>`}
+        ${e.route ? routeSvg(e.route) : e.photo ? `<img class="act-thumb act-photo-thumb" src="${e.photo}" alt="">` : `<span class="act-thumb act-icon">${TYPES[e.type].emoji}</span>`}
         <span class="act-body">
           <b>${esc(entryTitle(e))}</b>
           <span class="muted small">${when}</span>
@@ -320,7 +320,7 @@ function openActivity(key, id) {
   $('#actMeta').textContent = [
     capitalize(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })),
     e.startTime, TYPES[e.type].label,
-    e.source === 'gpx' ? 'GPX' : e.source === 'atajo' ? 'Atajo de iPhone' : 'A mano',
+    e.place, { gpx: 'GPX', atajo: 'Atajo de iPhone', capturas: 'Capturas de Fitness' }[e.source] || 'A mano',
   ].filter(Boolean).join(' · ');
 
   const stat = (v, l) => (v ? `<div class="kpi"><b>${v}</b><span>${l}</span></div>` : '');
@@ -329,8 +329,9 @@ function openActivity(key, id) {
     ${stat(e.sec && fmtDuration(e.sec), 'en movimiento')}
     ${stat(e.sec && (e.type === 'bike' ? round1(speedOf(e)).toLocaleString('es-ES') : fmtPace(e.sec / e.km)), e.type === 'bike' ? 'km/h' : 'ritmo /km')}
     ${stat(e.kcal && `${e.kcal}${e.kcalEst ? '*' : ''}`, 'kcal')}
-    ${stat(e.elev != null && e.route ? `${e.elev} m` : '', 'desnivel +')}
-    ${stat(e.hr, 'ppm media')}`;
+    ${stat(e.elev != null && (e.route || e.source === 'capturas') ? `${e.elev} m` : '', 'desnivel +')}
+    ${stat(e.hr, 'ppm media')}
+    ${stat(e.cadence, 'pasos/min')}`;
   $('#actNote').textContent = e.kcalEst ? '* Calorías estimadas con tu peso. ' : '';
 
   // Desnivel
@@ -347,7 +348,6 @@ function openActivity(key, id) {
   if (e.splits?.length) {
     const len = (e.splitLen || 1000) / 1000;
     const best = Math.min(...e.splits);
-    const maxS = Math.max(...e.splits);
     $('#actSplits').innerHTML = `
       <div class="act-sub">Parciales <span class="muted small">cada ${len} km</span></div>
       <table class="splits">${e.splits.map((s, i) => `
@@ -357,12 +357,14 @@ function openActivity(key, id) {
           <td class="split-bar"><i style="width:${Math.round((best / s) * 100)}%"></i></td>
           <td class="muted">${fmtDuration(s)}</td>
         </tr>`).join('')}</table>
-      ${maxS ? '' : ''}`;
+`;
   } else $('#actSplits').innerHTML = '';
 
   const mapBox = $('#actMap');
   mapBox.hidden = !e.route;
-  $('#actNoMap').hidden = !!e.route;
+  $('#actPhoto').hidden = !e.photo || !!e.route;
+  if (e.photo) $('#actPhoto').src = e.photo;
+  $('#actNoMap').hidden = !!e.route || !!e.photo;
   dialog.showModal();
   if (e.route) {
     loadLeaflet().then(() => {
@@ -431,20 +433,156 @@ function runPendingActivity() {
 }
 
 /* ---------------------------------------------------------
-   SUBIR GPX · vista previa antes de guardar
+   VISTA PREVIA antes de guardar (GPX o capturas): km, tiempo y kcal editables
    --------------------------------------------------------- */
+const clockText = (sec) => {
+  if (!sec) return '';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.round(sec % 60);
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+};
+
 function openGpxPreview(data) {
   gpxDraft = data;
   const start = data.start || new Date();
-  $('#gpxThumb').innerHTML = routeSvg(data.route, 'act-thumb act-thumb-lg');
+  $('#gpxHeading').textContent = data.source === 'capturas' ? 'Actividad desde capturas' : 'Nueva actividad';
+  $('#gpxThumb').innerHTML = data.route ? routeSvg(data.route, 'act-thumb act-thumb-lg')
+    : data.photo ? `<img class="act-thumb act-thumb-lg act-photo-thumb" src="${data.photo}" alt="">` : '';
   $('#gpxTitle').value = data.name || defaultTitle(data.type, start);
   $('#gpxType').value = data.type;
   $('#gpxDate').value = dateKey(start);
+  $('#gpxKm').value = data.km ? String(data.km).replace('.', ',') : '';
+  $('#gpxTime').value = clockText(data.sec);
+  $('#gpxKcal').value = data.kcal || estimateKcal(data.type, data.km || 0, data.sec || 0) || '';
+  gpxDraft.kcalShown = $('#gpxKcal').value;
   $('#gpxSummary').textContent = [
-    `${fmtKm(data.km)} km`, data.sec ? fmtDuration(data.sec) : 'sin tiempos',
-    data.elev ? `${data.elev} m de desnivel` : '', data.hr ? `${data.hr} ppm` : '',
+    data.elev != null ? `${data.elev} m de desnivel` : '', data.hr ? `${data.hr} ppm` : '',
+    data.cadence ? `${data.cadence} pasos/min` : '', data.splits?.length ? `${data.splits.length} parciales` : '',
+    data.place || '',
   ].filter(Boolean).join(' · ');
+  $('#gpxWarn').textContent = data.source === 'capturas'
+    ? 'Revisa los datos leídos de las capturas antes de guardar.' + (data.kcal ? '' : ' No he encontrado las calorías: van estimadas.')
+    : (data.kcal ? '' : 'Las calorías van estimadas con tu peso; cámbialas si tu reloj dice otra cosa.');
   $('#gpxDialog').showModal();
+}
+
+/* ---------------------------------------------------------
+   CAPTURAS DE PANTALLA · lee el texto de la ficha de Fitness (OCR en tu navegador)
+   Las imágenes no salen de tu dispositivo: se analizan aquí mismo.
+   --------------------------------------------------------- */
+const TESSERACT_JS = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const MONTHS = {
+  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+  enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5, julio: 6, agosto: 7, septiembre: 8, setiembre: 8, octubre: 9, noviembre: 10, diciembre: 11,
+};
+
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = TESSERACT_JS;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('No se pudo cargar el lector de capturas (¿sin conexión?).'));
+    document.head.append(s);
+  });
+}
+
+// Texto claro (de cualquier color) sobre fondo oscuro → texto negro sobre blanco, que se lee mucho mejor
+async function prepScreenshot(file) {
+  const bmp = await createImageBitmap(file);
+  const w = 1100, h = Math.round(bmp.height * (w / bmp.width));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.drawImage(bmp, 0, 0, w, h);
+  const img = g.getImageData(0, 0, w, h);
+  const p = img.data;
+  for (let i = 0; i < p.length; i += 4) {
+    const v = Math.max(p[i], p[i + 1], p[i + 2]) > 140 ? 0 : 255;
+    p[i] = p[i + 1] = p[i + 2] = v;
+  }
+  g.putImageData(img, 0, 0);
+  return { canvas: c, bmp };
+}
+
+// Recorte del mapa en pequeño, para la ficha: sin la barra de estado ni los botones de arriba
+function cropMapPhoto(bmp) {
+  const sy = Math.round(bmp.height * 0.125);
+  const srcH = Math.round(bmp.height * 0.36) - sy;
+  const w = 360, h = Math.round(srcH * (w / bmp.width));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(bmp, 0, sy, bmp.width, srcH, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.6);
+}
+
+function parseWorkoutText(text) {
+  const t = text.replace(/[’‘´`]/g, "'").replace(/[”“]/g, '"');
+  const out = {};
+  const time = t.match(/\b(\d{1,2}):(\d{2}):(\d{2})\b/);
+  if (time) out.sec = Number(time[1]) * 3600 + Number(time[2]) * 60 + Number(time[3]);
+  const dist = t.match(/(\d+[.,]\d+|\d+)\s?km\b(?!\s*\/)/i);
+  if (dist) out.km = round2(parseFloat(dist[1].replace(',', '.')));
+  const kcal = [...t.matchAll(/(\d{2,4})\s?k\s?c\s?a\s?l/gi)].map((m) => Number(m[1]));
+  if (kcal.length) out.kcal = kcal[0]; // la primera son las kcal activas
+  const elev = t.match(/\b(\d{1,4})\s?m\s+\d{2,3}\s?s\s?p\s?m/i) || t.match(/elevation[^\n]*\n\D*(\d{1,4})\s?m\b/i);
+  if (elev) out.elev = Number(elev[1]);
+  const cad = t.match(/\b(\d{2,3})\s?s\s?p\s?m/i);
+  if (cad) out.cadence = Number(cad[1]);
+
+  // Parciales: "1 05:56 5'56"/KM 156SPM" → tiempo de ese km (si el tiempo se lee mal, se usa el ritmo)
+  const splits = [];
+  t.split('\n').forEach((line) => {
+    const m = line.match(/^\W*(\d{1,2})\s+(\S+)\s+(\d{1,2})'?(\d{2})["']*\s*\/\s*km/i);
+    if (!m) return;
+    const tm = m[2].match(/^(\d{1,2}):(\d{2})$/);
+    const fromTime = tm && Number(tm[2]) < 60 ? Number(tm[1]) * 60 + Number(tm[2]) : null;
+    const fromPace = Number(m[4]) < 60 ? Number(m[3]) * 60 + Number(m[4]) : null;
+    const sec = fromTime ?? fromPace;
+    if (sec) splits[Number(m[1]) - 1] = sec;
+  });
+  const fullKm = Math.floor(out.km || 0);
+  const clean = splits.slice(0, fullKm);
+  if (clean.length && clean.every(Boolean)) out.splits = clean;
+
+  const months = Object.keys(MONTHS).join('|');
+  const dm = t.match(new RegExp(`(\\d{1,2})\\s+(?:de\\s+)?(${months})\\s+(?:de\\s+)?(\\d{4}),?\\s*(\\d{1,2}):(\\d{2})`, 'i'));
+  if (dm) out.start = new Date(Number(dm[3]), MONTHS[dm[2].toLowerCase()], Number(dm[1]), Number(dm[4]), Number(dm[5]));
+  if (/\b(cycl\w*|ride|bike|ciclismo|bici\w*)\b/i.test(t)) out.type = 'bike';
+  else if (/\b(run|running|carrera|correr)\b/i.test(t)) out.type = 'run';
+  const place = t.match(/^[^A-Za-zÁÉÍÓÚÑ\n]*([A-ZÁÉÍÓÚÑ][\wáéíóúñ .-]{1,30},\s*[A-ZÁÉÍÓÚÑ][\wáéíóúñ.-]{1,30}(?: [A-ZÁÉÍÓÚÑ][\wáéíóúñ.-]+)?)/m);
+  if (place) out.place = place[1].trim();
+  return out;
+}
+
+async function importScreenshots(files) {
+  const status = $('#actStatus');
+  status.hidden = false;
+  status.textContent = 'Preparando el lector de capturas… (la primera vez tarda un poco más)';
+  try {
+    await loadTesseract();
+    const worker = await Tesseract.createWorker('eng');
+    let text = '', photo = null;
+    for (const [i, file] of files.entries()) {
+      status.textContent = `Leyendo captura ${i + 1} de ${files.length}…`;
+      const { canvas, bmp } = await prepScreenshot(file);
+      const { data } = await worker.recognize(canvas);
+      text += `\n${data.text}`;
+      if (!photo && parseWorkoutText(data.text).place) photo = cropMapPhoto(bmp); // la captura con el mapa
+    }
+    await worker.terminate();
+    const p = parseWorkoutText(text);
+    if (!p.km && !p.sec) throw new Error('No he encontrado distancia ni tiempo en las capturas. Prueba con la pantalla de «Detalles del entreno».');
+    const type = p.type || 'run';
+    openGpxPreview({
+      source: 'capturas', type, km: p.km || 0, sec: p.sec || 0, kcal: p.kcal || 0, elev: p.elev ?? null,
+      cadence: p.cadence, splits: p.splits, place: p.place, start: p.start || null, photo,
+      name: p.place ? `${defaultTitle(type, p.start || new Date())} · ${p.place.split(',')[0]}` : '',
+    });
+  } catch (err) {
+    alert(err.message || 'No se pudieron leer las capturas.');
+  } finally {
+    status.hidden = true;
+  }
 }
 
 function bindActivities() {
@@ -458,17 +596,28 @@ function bindActivities() {
       alert(err.message || 'No se pudo leer el archivo.');
     }
   });
+  $('#shotFiles').addEventListener('change', (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (files.length) importScreenshots(files.slice(0, 4));
+  });
   $('#gpxForm').addEventListener('submit', (e) => {
     if (e.submitter?.value !== 'save' || !gpxDraft) return;
     const g = gpxDraft;
     const type = $('#gpxType').value;
     const key = $('#gpxDate').value || TODAY;
+    const km = round2(parseFloat($('#gpxKm').value.replace(',', '.'))) || g.km;
+    const sec = parseClock($('#gpxTime').value) || g.sec;
+    const kcalTyped = Number($('#gpxKcal').value);
+    // Si no tocaste las kcal y venían estimadas, siguen marcadas como estimadas
+    const kcalEst = !g.kcal && $('#gpxKcal').value === String(g.kcalShown);
     const entry = saveActivity(key, {
       id: uid(), type, title: $('#gpxTitle').value.trim() || defaultTitle(type, g.start), done: true,
-      km: g.km, sec: g.sec || undefined, kcal: estimateKcal(type, g.km, g.sec), kcalEst: true,
-      elev: g.elev, hr: g.hr || undefined, route: g.route, eleProfile: g.eleProfile || undefined,
-      splits: g.splits?.length ? g.splits : undefined, splitLen: type === 'bike' ? 5000 : 1000,
-      startTime: g.start ? fmtHour(g.start) : '', source: 'gpx',
+      km, sec: sec || undefined, kcal: kcalTyped > 0 ? Math.round(kcalTyped) : estimateKcal(type, km, sec), kcalEst,
+      elev: g.elev ?? undefined, hr: g.hr || undefined, cadence: g.cadence || undefined, place: g.place || undefined,
+      route: g.route || undefined, photo: g.photo || undefined, eleProfile: g.eleProfile || undefined,
+      splits: g.splits?.length ? g.splits : undefined, splitLen: type === 'bike' && g.source !== 'capturas' ? 5000 : 1000,
+      startTime: g.start ? fmtHour(g.start) : '', source: g.source || 'gpx',
     });
     gpxDraft = null;
     if (entry) setTimeout(() => openActivity(key, entry.id), 50);

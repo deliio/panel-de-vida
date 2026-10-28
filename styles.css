@@ -753,3 +753,9 @@ details.routine:not([open]) { padding-bottom: 6px; }
 .leaflet-control-attribution { background: rgba(0, 0, 0, .55) !important; color: var(--muted) !important; }
 .leaflet-control-attribution a { color: var(--text-2) !important; }
 .act-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.82) contrast(.9) saturate(.6); }
+
+/* ---------- Actividades desde capturas ---------- */
+#activitiesPanel h3 { flex-wrap: wrap; }
+.act-status { margin: -4px 0 12px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg); border: 1px dashed var(--border-strong); color: var(--text-2); }
+.act-photo { display: block; width: 100%; max-height: 300px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); margin: 10px 0; }
+.act-photo-thumb { object-fit: cover; }
