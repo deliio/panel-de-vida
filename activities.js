@@ -409,7 +409,8 @@ function readActivityFromUrl() {
   const q = new URLSearchParams(m[1]);
   const num = (k) => parseFloat(String(q.get(k) || '').replace(',', '.').replace(/[^\d.]/g, ''));
   const type = /bike|bici|cycl/i.test(q.get('tipo') || '') ? 'bike' : 'run';
-  const km = num('km'), min = num('min'), kcal = num('kcal');
+  const rawKm = num('km'), min = num('min'), kcal = num('kcal');
+  const km = rawKm > 300 ? rawKm / 1000 : rawKm; // por si Salud lo manda en metros
   if (!(km > 0)) { alert('El atajo no ha enviado los kilómetros. Revisa la acción de distancia.'); return null; }
   return { type, km: round2(km), sec: min > 0 ? Math.round(min * 60) : 0, kcal: kcal > 0 ? Math.round(kcal) : 0, title: (q.get('titulo') || '').slice(0, 60) };
 }
