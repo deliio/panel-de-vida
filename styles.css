@@ -19,6 +19,12 @@
   --text-2: #a8a8a8;
   --muted: #6b6b6b;
 
+  /* Dorado, como el resto de apps (finanzas, guardados, viajes) */
+  --accent: #e0b46e;
+  --accent-dim: rgba(224, 180, 110, 0.14);
+  --gold-text: #080808;
+  --serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
+
   /* Color coding de categorías (desaturado y elegante) */
   --c-uni: #7f9cf5;
   --c-proyecto: #63cfa5;
@@ -67,7 +73,7 @@ strong { color: var(--text); font-weight: 600; }
   border-right: 1px solid var(--border);
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px; font-weight: 600; letter-spacing: -.01em; }
-.brand-mark { font-size: 18px; color: var(--text-2); }
+.brand-mark { font-size: 18px; color: var(--accent); }
 
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-link {
@@ -76,7 +82,7 @@ strong { color: var(--text); font-weight: 600; }
   color: var(--text-2); transition: background .15s, color .15s;
 }
 .nav-link:hover { background: var(--hover); color: var(--text); }
-.nav-link.active { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--text-2); }
+.nav-link.active { background: var(--accent-dim); color: var(--accent); box-shadow: inset 2px 0 0 var(--accent); }
 
 .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 0 4px; }
 .clock { font: 600 28px/1 var(--mono); letter-spacing: -.02em; padding: 0 6px; color: var(--text-2); }
@@ -84,7 +90,7 @@ strong { color: var(--text); font-weight: 600; }
 .main { flex: 1; min-width: 0; padding: 36px clamp(16px, 4vw, 48px) 64px; max-width: 1440px; }
 
 .page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; scroll-margin-top: 20px; }
-.page-header h1 { font-size: clamp(24px, 3vw, 32px); font-weight: 700; letter-spacing: -.025em; }
+.page-header h1 { font-family: var(--serif); font-size: clamp(24px, 3vw, 32px); font-weight: 700; letter-spacing: -.025em; }
 
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .span-2 { grid-column: span 2; }
@@ -114,8 +120,8 @@ strong { color: var(--text); font-weight: 600; }
   transition: background .15s, border-color .15s;
 }
 .btn:hover { background: var(--hover); border-color: #3a3a3a; }
-.btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
-.btn-primary:hover { background: #fff; border-color: #fff; }
+.btn-primary { background: var(--accent); color: var(--gold-text); border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { background: #ebc584; border-color: #ebc584; }
 .btn-ghost { background: transparent; border-color: var(--border); color: var(--text-2); }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
 .link-btn { background: none; border: 0; color: var(--muted); font-size: 12px; cursor: pointer; }
@@ -126,7 +132,7 @@ strong { color: var(--text); font-weight: 600; }
   background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1;
 }
 .icon-btn:hover { background: var(--hover); color: var(--text); }
-:focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- Inputs ---------- */
 input[type="text"], input[type="number"], input[type="date"], select {
@@ -134,7 +140,7 @@ input[type="text"], input[type="number"], input[type="date"], select {
   padding: 8px 10px; min-width: 0; color: var(--text);
 }
 input::placeholder { color: var(--muted); }
-input:focus, select:focus { outline: none; border-color: var(--text-2); }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
 input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.7); }
 
 /* ---------- Etiquetas (color coding) ---------- */
@@ -150,7 +156,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.7); }
 .tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
 
 /* ---------- Barras de progreso ---------- */
-.bar { --c: var(--text-2); height: 6px; border-radius: 999px; background: var(--hover); overflow: hidden; }
+.bar { --c: var(--accent); height: 6px; border-radius: 999px; background: var(--hover); overflow: hidden; }
 .bar > span { display: block; height: 100%; width: var(--p, 0%); background: var(--c); border-radius: inherit; transition: width .5s ease; }
 
 /* ---------- 1 · Briefing ---------- */
@@ -273,9 +279,9 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.7); }
 
 .countdown {
   background:
-    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--c-viaje) 9%, transparent), transparent 60%),
+    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%),
     var(--surface);
-  border-color: color-mix(in srgb, var(--c-viaje) 22%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
 }
 .cd-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
 .cd-grid div { text-align: center; padding: 12px 0; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); }
@@ -471,7 +477,7 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(.7); }
 }
 .cal-day:hover:not(:disabled) { background: var(--hover); border-color: var(--border-strong); }
 .cal-day:disabled { cursor: default; opacity: .55; }
-.cal-day.is-today { border-color: var(--text-2); }
+.cal-day.is-today { border-color: var(--accent); }
 .cal-day.is-missed { border-color: color-mix(in srgb, var(--bad) 30%, var(--border)); }
 .cal-num { font: 600 13px var(--mono); color: var(--text); }
 .cal-plan { font-size: 10px; color: var(--c); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -624,7 +630,7 @@ code { font: 12px var(--mono); background: var(--hover); padding: 1px 5px; borde
   width: 100%; resize: vertical; font: 14px/1.5 var(--font);
   background: var(--bg); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 8px 10px;
 }
-#foodText:focus { outline: none; border-color: var(--text-2); }
+#foodText:focus { outline: none; border-color: var(--accent); }
 .food-estimate { margin-top: 10px; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--bg); }
 .est-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .est-table td { padding: 4px 4px; border-bottom: 1px solid var(--border); color: var(--text-2); }
@@ -672,7 +678,7 @@ details.routine:not([open]) { padding-bottom: 6px; }
   display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
   border: 1px solid var(--border-strong); font: 600 13px var(--mono); color: var(--text-2);
 }
-.day-pick input:checked + span { background: var(--text); color: var(--bg); border-color: var(--text); }
+.day-pick input:checked + span { background: var(--accent); color: var(--gold-text); border-color: var(--accent); }
 .day-pick input:focus-visible + span { outline: 2px solid var(--text-2); outline-offset: 2px; }
 .day-pick { min-width: 0; padding: 0; margin: 0; }
 .dialog { overflow-x: hidden; max-height: 92vh; }
@@ -770,7 +776,7 @@ details.routine:not([open]) { padding-bottom: 6px; }
 }
 .act-tab em, .group-tab em { font-style: normal; font: 11px var(--mono); color: var(--muted); }
 .act-tab.is-active { background: color-mix(in srgb, var(--c) 18%, var(--surface-2)); color: var(--text); }
-.group-tab.is-active { background: var(--hover); color: var(--text); }
+.group-tab.is-active { background: var(--accent-dim); color: var(--accent); }
 .group-tabs { border-radius: var(--radius-sm); }
 .group-tab { flex: 0 0 auto; border-radius: 6px; font-size: 12px; padding: 5px 10px; }
 .chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -786,3 +792,9 @@ details.routine:not([open]) { padding-bottom: 6px; }
 #routinesList { max-height: 520px; overflow-y: auto; padding-right: 2px; }
 .lang-btn .lang-icon { font-size: 15px; line-height: 1; }
 @media (max-width: 640px) { .sidebar-foot .lang-btn .lang-icon { font-size: 18px; } }
+
+/* ---------- Negro y dorado ---------- */
+::selection { background: var(--accent); color: var(--gold-text); }
+html { accent-color: var(--accent); caret-color: var(--accent); }
+.dlg h2, dialog h2 { font-family: var(--serif); }
+.cd-grid div:first-child strong { color: var(--accent); }
